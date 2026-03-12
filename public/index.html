@@ -1334,6 +1334,74 @@
             player.mesh.position.z = THREE.MathUtils.clamp(player.mesh.position.z, -96, 96);
         }
 
+        // OBB collision: half-extents match tank body BoxGeometry(2.2, 0.8, 2.8)
+        const TANK_HALF_W = 1.1;  // x half-extent (width/2)
+        const TANK_HALF_L = 1.4;  // z half-extent (length/2)
+
+        function getTankOBB(mesh) {
+            const rot = mesh.rotation.y;
+            const c = Math.cos(rot), s = Math.sin(rot);
+            // Three.js Y-rotation: localX = (cos, 0, sin), localZ = (-sin, 0, cos) in world XZ
+            return {
+                cx: mesh.position.x, cz: mesh.position.z,
+                axX: c, axZ: s,    // local X axis (right)
+                azX: -s, azZ: c,   // local Z axis (forward)
+            };
+        }
+
+        function obbOverlap(a, b) {
+            const dx = b.cx - a.cx, dz = b.cz - a.cz;
+            // 4 separating axes: a's localX, a's localZ, b's localX, b's localZ
+            const axes = [
+                { x: a.axX, z: a.axZ },
+                { x: a.azX, z: a.azZ },
+                { x: b.axX, z: b.axZ },
+                { x: b.azX, z: b.azZ },
+            ];
+            let minOverlap = Infinity, sepX = 0, sepZ = 0;
+            for (const ax of axes) {
+                const d = dx * ax.x + dz * ax.z;
+                const rA = Math.abs(a.axX * ax.x + a.axZ * ax.z) * TANK_HALF_W
+                         + Math.abs(a.azX * ax.x + a.azZ * ax.z) * TANK_HALF_L;
+                const rB = Math.abs(b.axX * ax.x + b.axZ * ax.z) * TANK_HALF_W
+                         + Math.abs(b.azX * ax.x + b.azZ * ax.z) * TANK_HALF_L;
+                const overlap = rA + rB - Math.abs(d);
+                if (overlap <= 0) return null;
+                if (overlap < minOverlap) {
+                    minOverlap = overlap;
+                    // normal points from b toward a (pushes a in +, b in -)
+                    const sign = d >= 0 ? 1 : -1;
+                    sepX = ax.x * sign;
+                    sepZ = ax.z * sign;
+                }
+            }
+            return { overlap: minOverlap, nx: sepX, nz: sepZ };
+        }
+
+        function resolveTankCollision() {
+            const p1 = players.p1, p2 = players.p2;
+            if (!p1.mesh || !p2.mesh) return;
+            // 迭代推开，确保完全分离
+            for (let iter = 0; iter < 4; iter++) {
+                const a = getTankOBB(p1.mesh);
+                const b = getTankOBB(p2.mesh);
+                const result = obbOverlap(a, b);
+                if (!result) return;
+                // 用中心连线方向推开（稳定，不会跳变），回退到 OBB 重叠量
+                let nx = p1.mesh.position.x - p2.mesh.position.x;
+                let nz = p1.mesh.position.z - p2.mesh.position.z;
+                const len = Math.hypot(nx, nz);
+                if (len < 0.001) { nx = 1; nz = 0; } else { nx /= len; nz /= len; }
+                const half = (result.overlap + 0.02) * 0.5;
+                p1.mesh.position.x += nx * half;
+                p1.mesh.position.z += nz * half;
+                p2.mesh.position.x -= nx * half;
+                p2.mesh.position.z -= nz * half;
+            }
+            keepTankInBounds(p1);
+            keepTankInBounds(p2);
+        }
+
         function resolveRockCollisions(playerKey) {
             const player = players[playerKey];
             const now = Date.now();
@@ -1543,6 +1611,10 @@
         function movePlayer(playerKey, controls, fireKey, deltaSeconds) {
             const player = players[playerKey];
             if (player.usingSatellite || player.satelliteFiring) return;
+            // 保存移动前的位置和朝向
+            if (!player._prevPos) player._prevPos = new THREE.Vector3();
+            player._prevPos.copy(player.mesh.position);
+            player._prevRotY = player.mesh.rotation.y;
             player.boosting = player.boosting && Date.now() < player.boostEndTime;
             const scopeMult = player.scoping ? SCOPE_SPEED_MULT : 1;
             const boostMult = player.boosting ? BOOST_MULTIPLIER : 1;
@@ -1560,6 +1632,7 @@
 
             keepTankInBounds(player);
             resolveRockCollisions(playerKey);
+
         }
 
         function renderView(cam, player, x, y, w, h) {
@@ -1977,6 +2050,7 @@
 
             movePlayer('p1', { forward: keyBindings.p1.forward, backward: keyBindings.p1.backward, left: keyBindings.p1.left, right: keyBindings.p1.right }, keyBindings.p1.fire, deltaSeconds);
             movePlayer('p2', { forward: keyBindings.p2.forward, backward: keyBindings.p2.backward, left: keyBindings.p2.left, right: keyBindings.p2.right }, keyBindings.p2.fire, deltaSeconds);
+            resolveTankCollision();
             if (isKeyJustPressed(keyBindings.p1.mine)) tryPlaceMine('p1');
             if (isKeyJustPressed(keyBindings.p2.mine)) tryPlaceMine('p2');
             updateGrassStealth();
