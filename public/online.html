@@ -575,6 +575,7 @@ let lastTapTime = 0;
 let scoping = false;
 let usingSatellite = false;
 let lastSentInputAt = 0;
+let animationFrameId = 0;
 
 let enableCollisionDamage = true;
 let enablePoisonCircle = true;
@@ -681,6 +682,7 @@ function setupMobileControls() {
     mobileInput.left = false;
     mobileInput.right = false;
     knob.style.transform = 'translate(0px, 0px)';
+    sendImmediateClientInput();
   };
 
   const updateStick = (clientX, clientY) => {
@@ -704,6 +706,7 @@ function setupMobileControls() {
     mobileInput.backward = ny > dead;
     mobileInput.left = nx < -dead;
     mobileInput.right = nx > dead;
+    sendImmediateClientInput();
   };
 
   stick.addEventListener('pointerdown', (e) => {
@@ -732,9 +735,11 @@ function setupMobileControls() {
   const triggerTapAction = (field, btn) => {
     mobileInput[field] = true;
     btn.classList.add('active');
+    sendImmediateClientInput();
     setTimeout(() => {
       mobileInput[field] = false;
       btn.classList.remove('active');
+      sendImmediateClientInput();
     }, 90);
   };
 
@@ -742,6 +747,7 @@ function setupMobileControls() {
   const setFire = (on) => {
     mobileInput.fire = on;
     fireBtn.classList.toggle('active', on);
+    sendImmediateClientInput();
   };
   fireBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); setFire(true); });
   fireBtn.addEventListener('pointerup', (e) => { e.preventDefault(); setFire(false); });
@@ -776,6 +782,7 @@ function setupMobileControls() {
 
     player.satelliteTarget.x = THREE.MathUtils.clamp((dx / mapRadiusPx) * MAP_HALF, -MAP_HALF + 10, MAP_HALF - 10);
     player.satelliteTarget.z = THREE.MathUtils.clamp((dy / mapRadiusPx) * MAP_HALF, -MAP_HALF + 10, MAP_HALF - 10);
+    sendImmediateClientInput();
   });
 }
 
@@ -863,6 +870,96 @@ function darkenColor(hex, factor) {
   const g = Math.floor(((hex >> 8) & 0xff) * factor);
   const b = Math.floor((hex & 0xff) * factor);
   return (r << 16) | (g << 8) | b;
+}
+
+function disposeObjectTree(obj) {
+  if (!obj) return;
+  if (obj.parent) obj.parent.remove(obj);
+  obj.traverse((child) => {
+    if (child.geometry) child.geometry.dispose();
+    if (Array.isArray(child.material)) {
+      child.material.forEach((mat) => mat && mat.dispose && mat.dispose());
+    } else if (child.material && child.material.dispose) {
+      child.material.dispose();
+    }
+  });
+}
+
+function clearGameWorld() {
+  for (const player of players) {
+    if (player.satelliteBeam) disposeObjectTree(player.satelliteBeam);
+    if (player.mesh) disposeObjectTree(player.mesh);
+  }
+  for (const bullet of bullets) {
+    if (bullet.mesh) disposeObjectTree(bullet.mesh);
+  }
+  for (const mine of mines) {
+    if (mine.mesh) disposeObjectTree(mine.mesh);
+  }
+  for (const rock of rocks) {
+    if (rock.mesh) disposeObjectTree(rock.mesh);
+  }
+  for (const pack of healthPacks) {
+    if (pack.mesh) disposeObjectTree(pack.mesh);
+  }
+  for (const patch of grassPatches) {
+    if (patch.mesh) disposeObjectTree(patch.mesh);
+  }
+  if (poisonCircle) disposeObjectTree(poisonCircle);
+  if (satellitePickup && satellitePickup.mesh) disposeObjectTree(satellitePickup.mesh);
+
+  players = [];
+  bullets = [];
+  mines = [];
+  rocks = [];
+  healthPacks = [];
+  grassPatches = [];
+  poisonCircle = null;
+  satellitePickup = null;
+  scoping = false;
+
+  if (scopeCanvas && scopeCtx) {
+    scopeCanvas.classList.remove('active');
+    scopeCtx.clearRect(0, 0, scopeCanvas.width, scopeCanvas.height);
+  }
+  if (satelliteCanvas && satelliteCtx) {
+    satelliteCanvas.classList.remove('active');
+    satelliteCtx.clearRect(0, 0, satelliteCanvas.width, satelliteCanvas.height);
+  }
+}
+
+function createBulletVisual(bullet) {
+  const geo = new THREE.SphereGeometry(bullet.size, 8, 8);
+  const mat = new THREE.MeshBasicMaterial({ color: bullet.color });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(bullet.x, 0.8, bullet.z);
+  scene.add(mesh);
+  bullet.mesh = mesh;
+  return bullet;
+}
+
+function spawnBulletFromState(data) {
+  const weaponKey = data.w || 'mg';
+  const weapon = WEAPONS[weaponKey] || WEAPONS.mg;
+  const bullet = {
+    x: data.x,
+    z: data.z,
+    vx: data.vx,
+    vz: data.vz,
+    dmg: weapon.dmg,
+    color: weapon.color,
+    size: weapon.size,
+    owner: data.p,
+    life: 0,
+    remoteVisual: true
+  };
+  bullets.push(createBulletVisual(bullet));
+}
+
+function sendImmediateClientInput() {
+  if (isHost || !gameStarted || localPlayerIndex < 0) return;
+  sendToHost({ t: 'input', p: localPlayerIndex, input: buildClientInput() });
+  lastSentInputAt = performance.now();
 }
 
 // ============== ENVIRONMENT ==============
@@ -959,7 +1056,7 @@ function createGrassPatch(x, z, radius) {
 
   group.position.set(x, 0, z);
   scene.add(group);
-  return { x, z, radius };
+  return { mesh: group, x, z, radius };
 }
 
 function spawnGrassPatches() {
@@ -1067,6 +1164,7 @@ function checkWinner() {
 }
 
 function showWinner(winnerIndex) {
+  gameStarted = false;
   const overlay = document.getElementById('winner-overlay');
   const text = document.getElementById('winner-text');
   if (winnerIndex >= 0) {
@@ -1110,14 +1208,7 @@ function fire(player) {
     life: 0
   };
 
-  const geo = new THREE.SphereGeometry(weapon.size, 8, 8);
-  const mat = new THREE.MeshBasicMaterial({ color: weapon.color });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(bullet.x, 0.8, bullet.z);
-  scene.add(mesh);
-  bullet.mesh = mesh;
-
-  bullets.push(bullet);
+  bullets.push(createBulletVisual(bullet));
   broadcast({ t: 'fire', p: player.index, x: muzzlePos.x, z: muzzlePos.z, vx: bullet.vx, vz: bullet.vz, w: player.weapon });
 }
 
@@ -1154,6 +1245,8 @@ function createMine(player) {
 function fireSatelliteLaser(player) {
   if (!player.usingSatellite || player.satelliteFiring) return;
   player.satelliteFiring = true;
+  player.scoping = false;
+  if (player.index === localPlayerIndex) scoping = false;
   player.satelliteFireTime = performance.now();
   player.satelliteEndTime = player.satelliteFireTime + SATELLITE_EFFECT_MS;
   player.satelliteDamageApplied = false;
@@ -1426,12 +1519,23 @@ function updateSatellitePickup(dt) {
       player.satelliteFiring = false;
       player.satelliteEndTime = 0;
       player.scoping = false;
+      if (player.index === localPlayerIndex) scoping = false;
       player.satelliteTarget.x = player.mesh.position.x;
       player.satelliteTarget.z = player.mesh.position.z;
       satellitePickup.mesh.visible = false;
+      satellitePickup.respawnAt = now + SATELLITE_RESPAWN;
       broadcast({ t: 'satpick', p: player.index });
       break;
     }
+  }
+
+  if (satellitePickup.respawnAt && now > satellitePickup.respawnAt && !satellitePickup.mesh.visible) {
+    const pos = findSafeSpawnPosition(30, 8, 10, 8);
+    satellitePickup.x = pos.x;
+    satellitePickup.z = pos.z;
+    satellitePickup.mesh.position.set(pos.x, 2.6, pos.z);
+    satellitePickup.mesh.visible = true;
+    satellitePickup.respawnAt = 0;
   }
 }
 
@@ -1473,8 +1577,11 @@ function updateSatellitePlayers(dt) {
       player.satelliteBeam = null;
       player.usingSatellite = false;
       player.satelliteFiring = false;
+      player.satelliteFireTime = 0;
       player.satelliteEndTime = 0;
+      player.satelliteDamageApplied = false;
       player.satelliteHitTargets = null;
+      if (player.index === localPlayerIndex) scoping = false;
       continue;
     }
 
@@ -1523,7 +1630,7 @@ function updatePoison(dt) {
   }
 }
 
-function updateBullets(dt) {
+function updateBullets(dt, visualOnly = false) {
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i];
     b.x += b.vx * dt;
@@ -1544,8 +1651,10 @@ function updateBullets(dt) {
       const dx = player.mesh.position.x - b.x;
       const dz = player.mesh.position.z - b.z;
       if (Math.sqrt(dx * dx + dz * dz) < 2.2) {
-        applyDamage(player, b.dmg);
-        broadcast({ t: 'dmg', p: player.index, d: b.dmg, b: true });
+        if (!visualOnly) {
+          applyDamage(player, b.dmg);
+          broadcast({ t: 'dmg', p: player.index, d: b.dmg, b: true });
+        }
         scene.remove(b.mesh);
         bullets.splice(i, 1);
         break;
@@ -2088,6 +2197,26 @@ function handleMessage(data, conn) {
       }
       break;
 
+    case 'fire':
+      if (!isHost) {
+        spawnBulletFromState(data);
+      }
+      break;
+
+    case 'satpick':
+      if (!isHost && players[data.p]) {
+        const player = players[data.p];
+        player.usingSatellite = true;
+        player.satelliteFiring = false;
+        player.scoping = false;
+        if (player.index === localPlayerIndex) scoping = false;
+        if (player.mesh) {
+          player.satelliteTarget.x = player.mesh.position.x;
+          player.satelliteTarget.z = player.mesh.position.z;
+        }
+      }
+      break;
+
     case 'win':
       showWinner(data.w);
       break;
@@ -2311,6 +2440,20 @@ function gameLoop() {
       lastStateBroadcast = now;
     }
   } else {
+    const localPlayer = players[localPlayerIndex];
+    if (localPlayer && localPlayer.alive) {
+      const scopePressed = !!((keys['KeyZ'] && !prevKeys['KeyZ']) || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle));
+      if (scopePressed && !localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
+        localPlayer.scoping = !localPlayer.scoping;
+        scoping = localPlayer.scoping;
+      }
+
+      const weaponPressed = !!((keys['KeyQ'] && !prevKeys['KeyQ']) || (mobileInput.weaponToggle && !prevMobileInput.weaponToggle));
+      if (weaponPressed && !localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
+        toggleWeapon(localPlayer);
+      }
+    }
+
     if (localPlayerIndex >= 0) {
       const now = performance.now();
       if (now - lastSentInputAt > 16) {
@@ -2318,6 +2461,8 @@ function gameLoop() {
         lastSentInputAt = now;
       }
     }
+
+    updateBullets(dt, true);
   }
 
   // Render
@@ -2339,7 +2484,11 @@ function gameLoop() {
   prevMobileInput.scopeToggle = mobileInput.scopeToggle;
   prevMobileInput.weaponToggle = mobileInput.weaponToggle;
 
-  requestAnimationFrame(gameLoop);
+  if (gameStarted) {
+    animationFrameId = requestAnimationFrame(gameLoop);
+  } else {
+    animationFrameId = 0;
+  }
 }
 
 // ============== LOBBY ==============
@@ -2399,6 +2548,14 @@ function showStatus(msg, type) {
 
 // ============== START GAME ==============
 function startGame(startCfg = null) {
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = 0;
+  }
+  clearGameWorld();
+  Object.keys(keys).forEach((key) => { keys[key] = false; prevKeys[key] = false; });
+  mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false };
+  prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false };
   gameStarted = true;
   gameStartTime = performance.now();
   const playerCount = Math.max(1, Math.min(4, lobbyState.players.length || 1));
@@ -2560,10 +2717,13 @@ document.addEventListener('keydown', (e) => {
   if (['Space', 'KeyZ', 'KeyQ', 'KeyE', 'KeyC'].includes(e.code)) {
     e.preventDefault();
   }
+  sendImmediateClientInput();
 });
 
 document.addEventListener('keyup', (e) => {
   keys[e.code] = false;
+  prevKeys[e.code] = false;
+  sendImmediateClientInput();
 });
 
 // ============== INIT ==============
