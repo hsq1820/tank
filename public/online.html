@@ -1570,6 +1570,7 @@ function handleMessage(data, conn) {
         }
         const player = { index: playerIndex, name: data.name, ready: false };
         lobbyState.players.push(player);
+        updateLobbyUI();
         conn.send({ t: 'joined', index: playerIndex, players: lobbyState.players });
         broadcastLobby();
       }
@@ -1952,7 +1953,7 @@ document.getElementById('btn-connect').addEventListener('click', () => {
 
 document.getElementById('btn-back').addEventListener('click', () => {
   if (peer) peer.destroy();
-  showLobbySection('lobby-main');
+  window.location.href = '/';
 });
 
 document.getElementById('btn-cancel-join').addEventListener('click', () => {
