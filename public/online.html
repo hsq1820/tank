@@ -805,6 +805,7 @@ function createPlayerState(index) {
     satelliteFiring: false,
     satelliteTarget: { x: 0, z: 0 },
     satelliteFireTime: 0,
+    satelliteEndTime: 0,
     satelliteBeam: null,
     satelliteDamageApplied: false,
     alive: true,
@@ -1153,6 +1154,7 @@ function fireSatelliteLaser(player) {
   if (!player.usingSatellite || player.satelliteFiring) return;
   player.satelliteFiring = true;
   player.satelliteFireTime = performance.now();
+  player.satelliteEndTime = player.satelliteFireTime + SATELLITE_EFFECT_MS;
   player.satelliteDamageApplied = false;
 
   const beam = createSatelliteBeamMesh();
@@ -1292,6 +1294,7 @@ function resolveTankCollisions() {
 
 function resolveRockCollisions(player) {
   const pos = player.mesh.position;
+  const now = performance.now();
   for (const rock of rocks) {
     const dx = pos.x - rock.x;
     const dz = pos.z - rock.z;
@@ -1303,6 +1306,12 @@ function resolveRockCollisions(player) {
       const nz = dz / dist;
       pos.x = rock.x + nx * minDist;
       pos.z = rock.z + nz * minDist;
+
+      if (enableCollisionDamage && now - player.lastCollisionDmgTime > COLLISION_DAMAGE_CD) {
+        player.lastCollisionDmgTime = now;
+        applyDamage(player, COLLISION_DAMAGE);
+        broadcast({ t: 'dmg', p: player.index, d: COLLISION_DAMAGE, rock: true });
+      }
     }
   }
 }
@@ -1413,6 +1422,7 @@ function updateSatellitePickup(dt) {
       player.hasSatellite = false;
       player.usingSatellite = true;
       player.satelliteFiring = false;
+      player.satelliteEndTime = 0;
       player.scoping = false;
       player.satelliteTarget.x = player.mesh.position.x;
       player.satelliteTarget.z = player.mesh.position.z;
@@ -1453,16 +1463,17 @@ function updateSatellitePlayers(dt) {
       continue;
     }
 
-    if (!player.satelliteBeam) continue;
-
     const now = performance.now();
-    if (now - player.satelliteFireTime > SATELLITE_EFFECT_MS) {
-      scene.remove(player.satelliteBeam);
+    if (player.satelliteEndTime > 0 && now >= player.satelliteEndTime) {
+      if (player.satelliteBeam) scene.remove(player.satelliteBeam);
       player.satelliteBeam = null;
       player.usingSatellite = false;
       player.satelliteFiring = false;
+      player.satelliteEndTime = 0;
       continue;
     }
+
+    if (!player.satelliteBeam) continue;
 
     // Update beam position
     player.satelliteBeam.position.set(player.satelliteTarget.x, 0, player.satelliteTarget.z);
