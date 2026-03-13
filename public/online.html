@@ -1577,7 +1577,7 @@ function handleMessage(data, conn) {
       break;
 
     case 'start':
-      if (isHost) {
+      if (!isHost) {
         startGame();
       }
       break;
@@ -1849,20 +1849,16 @@ function showStatus(msg, type) {
 function startGame() {
   gameStarted = true;
   gameStartTime = performance.now();
+  const playerCount = Math.max(1, Math.min(4, lobbyState.players.length || 1));
+  const myIndex = localPlayerIndex;
 
   // Initialize all players
   players = [];
   for (let i = 0; i < 4; i++) {
     const p = createPlayerState(i);
-    p.alive = false;
+    p.alive = i < playerCount;
     p.hasSatellite = false;
-    
-    // Host is always player 0
-    if (i === 0) {
-      p.alive = true;
-      p.name = '你';
-      localPlayerIndex = 0;
-    }
+    p.name = (lobbyState.players[i] && lobbyState.players[i].name) || PLAYER_NAMES[i];
     
     // Create mesh
     const tank = createTankMesh(p.color);
@@ -1880,6 +1876,8 @@ function startGame() {
     players.push(p);
   }
 
+  localPlayerIndex = myIndex >= 0 ? myIndex : 0;
+
   // Setup game options
   enableCollisionDamage = document.getElementById('opt-collision').checked;
   enablePoisonCircle = document.getElementById('opt-poison').checked;
@@ -1896,6 +1894,9 @@ function startGame() {
 
   // Hide lobby, show game
   document.getElementById('lobby').classList.add('hidden');
+  document.getElementById('modal-create').classList.remove('show');
+  document.getElementById('modal-join').classList.remove('show');
+  document.getElementById('canvas-container').classList.add('active');
   document.getElementById('ui').classList.add('active');
   document.getElementById('winner-overlay').classList.remove('show');
 
