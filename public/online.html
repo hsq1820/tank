@@ -536,6 +536,7 @@ const SATELLITE_TARGET_SPEED = 40;
 const SATELLITE_RADIUS = 10;
 const SATELLITE_DAMAGE = 75;
 const SATELLITE_EFFECT_MS = 1500;
+const SATELLITE_RESPAWN = 30000;
 
 const WEAPONS = {
   mg: { name: '机枪', dmg: 1, cd: 50, speed: 120, color: 0xff4400, size: 0.15 },
@@ -1509,6 +1510,18 @@ function updateSatellitePickup(dt) {
   satellitePickup.mesh.rotation.y += dt * 1.5;
   satellitePickup.mesh.position.y = 2.6 + Math.sin(now * 0.0035) * 0.45;
 
+  if (!satellitePickup.mesh.visible) {
+    if (satellitePickup.respawnAt && now > satellitePickup.respawnAt) {
+      const pos = findSafeSpawnPosition(30, 8, 10, 8);
+      satellitePickup.x = pos.x;
+      satellitePickup.z = pos.z;
+      satellitePickup.mesh.position.set(pos.x, 2.6, pos.z);
+      satellitePickup.mesh.visible = true;
+      satellitePickup.respawnAt = 0;
+    }
+    return;
+  }
+
   for (const player of players) {
     if (!player.alive || !player.mesh || player.usingSatellite) continue;
     const dx = player.mesh.position.x - satellitePickup.x;
@@ -1517,25 +1530,17 @@ function updateSatellitePickup(dt) {
       player.hasSatellite = false;
       player.usingSatellite = true;
       player.satelliteFiring = false;
+      player.satelliteFireTime = 0;
       player.satelliteEndTime = 0;
       player.scoping = false;
-      if (player.index === localPlayerIndex) scoping = false;
       player.satelliteTarget.x = player.mesh.position.x;
       player.satelliteTarget.z = player.mesh.position.z;
+      if (player.index === localPlayerIndex) scoping = false;
       satellitePickup.mesh.visible = false;
       satellitePickup.respawnAt = now + SATELLITE_RESPAWN;
       broadcast({ t: 'satpick', p: player.index });
       break;
     }
-  }
-
-  if (satellitePickup.respawnAt && now > satellitePickup.respawnAt && !satellitePickup.mesh.visible) {
-    const pos = findSafeSpawnPosition(30, 8, 10, 8);
-    satellitePickup.x = pos.x;
-    satellitePickup.z = pos.z;
-    satellitePickup.mesh.position.set(pos.x, 2.6, pos.z);
-    satellitePickup.mesh.visible = true;
-    satellitePickup.respawnAt = 0;
   }
 }
 
@@ -2206,14 +2211,17 @@ function handleMessage(data, conn) {
     case 'satpick':
       if (!isHost && players[data.p]) {
         const player = players[data.p];
+        player.hasSatellite = false;
         player.usingSatellite = true;
         player.satelliteFiring = false;
+        player.satelliteFireTime = 0;
+        player.satelliteEndTime = 0;
         player.scoping = false;
-        if (player.index === localPlayerIndex) scoping = false;
         if (player.mesh) {
           player.satelliteTarget.x = player.mesh.position.x;
           player.satelliteTarget.z = player.mesh.position.z;
         }
+        if (player.index === localPlayerIndex) scoping = false;
       }
       break;
 
@@ -2254,6 +2262,7 @@ function applyRemoteState(state) {
     player.hp = ps.hp;
     player.weapon = ps.w;
     player.alive = ps.alive;
+    player.hasSatellite = !!ps.hs;
     player.usingSatellite = ps.us;
     player.satelliteFiring = !!ps.sf;
     player.scoping = ps.sc;
@@ -2334,6 +2343,8 @@ function gameLoop() {
         player.hasSatellite = false;
         player.usingSatellite = true;
         player.satelliteFiring = false;
+        player.satelliteEndTime = 0;
+        player.scoping = false;
         if (player.mesh) {
           player.satelliteTarget.x = player.mesh.position.x;
           player.satelliteTarget.z = player.mesh.position.z;
@@ -2374,7 +2385,18 @@ function gameLoop() {
         createMine(localPlayer);
       }
       if (keys['KeyC'] && !prevKeys['KeyC']) {
-        if (localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
+        if (localPlayer.hasSatellite) {
+          localPlayer.hasSatellite = false;
+          localPlayer.usingSatellite = true;
+          localPlayer.satelliteFiring = false;
+          localPlayer.satelliteEndTime = 0;
+          localPlayer.scoping = false;
+          scoping = false;
+          if (localPlayer.mesh) {
+            localPlayer.satelliteTarget.x = localPlayer.mesh.position.x;
+            localPlayer.satelliteTarget.z = localPlayer.mesh.position.z;
+          }
+        } else if (localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
           fireSatelliteLaser(localPlayer);
         }
       }
@@ -2429,6 +2451,7 @@ function gameLoop() {
           hp: p.hp,
           w: p.weapon,
           alive: p.alive,
+          hs: !!p.hasSatellite,
           us: p.usingSatellite,
           sf: p.satelliteFiring,
           sc: p.scoping,
