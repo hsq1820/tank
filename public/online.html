@@ -1322,6 +1322,7 @@ function renderView() {
   if (localPlayerIndex < 0 || !players[localPlayerIndex] || !players[localPlayerIndex].alive) {
     camera.position.set(0, 50, 50);
     camera.lookAt(0, 0, 0);
+    renderer.render(scene, camera);
     return;
   }
 
@@ -1359,6 +1360,8 @@ function renderView() {
   if (!players.some(p => p.usingSatellite)) {
     satelliteCanvas.classList.remove('active');
   }
+
+  renderer.render(scene, camera);
 }
 
 function drawSatelliteOverlay(target) {
