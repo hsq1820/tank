@@ -382,7 +382,7 @@ const BOOST_MULTIPLIER = 2.7;
 const COLLISION_DAMAGE = 100/6;
 const COLLISION_DAMAGE_CD = 1000;
 const POISON_DURATION = 150;
-const MAX_RADIUS = Math.sqrt(200**2);
+const MAX_RADIUS = Math.sqrt(100 * 100 + 100 * 100);
 const HEALTH_PACK_HEAL = 100/3;
 const HEALTH_PACK_RESPAWN = 15000;
 const MINIMAP_RADIUS = 65;
@@ -435,6 +435,7 @@ let lastTapKey = '';
 let lastTapTime = 0;
 let scoping = false;
 let usingSatellite = false;
+let lastSentInputAt = 0;
 
 let enableCollisionDamage = true;
 let enablePoisonCircle = true;
@@ -543,7 +544,8 @@ function createPlayerState(index) {
     satelliteDamageApplied: false,
     alive: true,
     x: 0, z: 0, rotation: 0,
-    prevX: 0, prevZ: 0
+    prevX: 0, prevZ: 0,
+    input: { f: false, b: false, l: false, r: false, fire: false, mine: false, scope: false, sat: false }
   };
 }
 
@@ -923,30 +925,27 @@ function createSatelliteBeamMesh() {
 
 // ============== COLLISION ==============
 function keepTankInBounds(player) {
-  const limit = MAP_HALF - 2;
-  if (player.mesh.position.x < -limit) player.mesh.position.x = -limit;
-  if (player.mesh.position.x > limit) player.mesh.position.x = limit;
-  if (player.mesh.position.z < -limit) player.mesh.position.z = -limit;
-  if (player.mesh.position.z > limit) player.mesh.position.z = limit;
+  player.mesh.position.x = THREE.MathUtils.clamp(player.mesh.position.x, -96, 96);
+  player.mesh.position.z = THREE.MathUtils.clamp(player.mesh.position.z, -96, 96);
 }
 
 function getTankOBB(player) {
-  const pos = player.mesh.position;
-  const rot = player.mesh.rotation.y;
-  const cx = pos.x;
-  const cz = pos.z;
-  const cos = Math.cos(rot);
-  const sin = Math.sin(rot);
+  const mesh = player.mesh;
+  const rot = mesh.rotation.y;
+  const c = Math.cos(rot), s = Math.sin(rot);
   return {
-    cx, cz,
-    axX: cos * TANK_HALF_L + sin * TANK_HALF_W,
-    axZ: -sin * TANK_HALF_L + cos * TANK_HALF_W,
-    azX: cos * TANK_HALF_W - sin * TANK_HALF_L,
-    azZ: sin * TANK_HALF_W + cos * TANK_HALF_L
+    cx: mesh.position.x,
+    cz: mesh.position.z,
+    axX: c,
+    axZ: s,
+    azX: -s,
+    azZ: c
   };
 }
 
 function obbOverlap(a, b) {
+  const dx = b.cx - a.cx;
+  const dz = b.cz - a.cz;
   const axes = [
     { x: a.axX, z: a.axZ },
     { x: a.azX, z: a.azZ },
@@ -955,31 +954,25 @@ function obbOverlap(a, b) {
   ];
 
   let minOverlap = Infinity;
-  let minAxis = null;
+  let sepX = 0;
+  let sepZ = 0;
 
-  for (const axis of axes) {
-    const len = Math.sqrt(axis.x * axis.x + axis.z * axis.z);
-    if (len < 0.001) continue;
-    const nx = axis.x / len;
-    const nz = axis.z / len;
-
-    const proj = (obj) => {
-      return (obj.cx - a.cx) * nx + (obj.cz - a.cz) * nz;
-    };
-
-    const aMin = proj(a) - (Math.abs(a.axX * nx + a.axZ * nz) + Math.abs(a.azX * nx + a.azZ * nz));
-    const aMax = proj(a) + (Math.abs(a.axX * nx + a.axZ * nz) + Math.abs(a.azX * nx + a.azZ * nz));
-    const bMin = proj(b) - (Math.abs(b.axX * nx + b.axZ * nz) + Math.abs(b.azX * nx + b.azZ * nz));
-    const bMax = proj(b) + (Math.abs(b.axX * nx + b.axZ * nz) + Math.abs(b.azX * nx + b.azZ * nz));
-
-    const overlap = Math.min(aMax - bMin, bMax - aMin);
+  for (const ax of axes) {
+    const d = dx * ax.x + dz * ax.z;
+    const rA = Math.abs(a.axX * ax.x + a.axZ * ax.z) * TANK_HALF_W
+      + Math.abs(a.azX * ax.x + a.azZ * ax.z) * TANK_HALF_L;
+    const rB = Math.abs(b.axX * ax.x + b.axZ * ax.z) * TANK_HALF_W
+      + Math.abs(b.azX * ax.x + b.azZ * ax.z) * TANK_HALF_L;
+    const overlap = rA + rB - Math.abs(d);
+    if (overlap <= 0) return null;
     if (overlap < minOverlap) {
       minOverlap = overlap;
-      minAxis = { x: nx, z: nz };
+      const sign = d >= 0 ? 1 : -1;
+      sepX = ax.x * sign;
+      sepZ = ax.z * sign;
     }
   }
-
-  return { overlap: minOverlap, nx: minAxis.x, nz: minAxis.z };
+  return { overlap: minOverlap, nx: sepX, nz: sepZ };
 }
 
 function resolveTankCollisions() {
@@ -989,43 +982,34 @@ function resolveTankCollisions() {
       for (let j = i + 1; j < alivePlayers.length; j++) {
         const p1 = alivePlayers[i];
         const p2 = alivePlayers[j];
-        
-        const obb1 = getTankOBB(p1);
-        const obb2 = getTankOBB(p2);
-        const result = obbOverlap(obb1, obb2);
+        const a = getTankOBB(p1);
+        const b = getTankOBB(p2);
+        const result = obbOverlap(a, b);
+        if (!result) continue;
 
-        if (result.overlap > 0) {
-          const dx = p2.mesh.position.x - p1.mesh.position.x;
-          const dz = p2.mesh.position.z - p1.mesh.position.z;
-          const dist = Math.sqrt(dx * dx + dz * dz);
-          
-          if (dist > 0.01) {
-            const nx = dx / dist;
-            const nz = dz / dist;
-            const push = result.overlap + 0.02;
-            
-            p1.mesh.position.x -= nx * push * 0.5;
-            p1.mesh.position.z -= nz * push * 0.5;
-            p2.mesh.position.x += nx * push * 0.5;
-            p2.mesh.position.z += nz * push * 0.5;
+        let nx = p1.mesh.position.x - p2.mesh.position.x;
+        let nz = p1.mesh.position.z - p2.mesh.position.z;
+        const len = Math.hypot(nx, nz);
+        if (len < 0.001) { nx = 1; nz = 0; } else { nx /= len; nz /= len; }
 
-            keepTankInBounds(p1);
-            keepTankInBounds(p2);
+        const half = (result.overlap + 0.02) * 0.5;
+        p1.mesh.position.x += nx * half;
+        p1.mesh.position.z += nz * half;
+        p2.mesh.position.x -= nx * half;
+        p2.mesh.position.z -= nz * half;
 
-            // Apply collision damage
-            const now = performance.now();
-            if (enableCollisionDamage) {
-              if (now - p1.lastCollisionDmgTime > COLLISION_DAMAGE_CD) {
-                p1.lastCollisionDmgTime = now;
-                applyDamage(p1, COLLISION_DAMAGE);
-                broadcast({ t: 'dmg', p: p1.index, d: COLLISION_DAMAGE });
-              }
-              if (now - p2.lastCollisionDmgTime > COLLISION_DAMAGE_CD) {
-                p2.lastCollisionDmgTime = now;
-                applyDamage(p2, COLLISION_DAMAGE);
-                broadcast({ t: 'dmg', p: p2.index, d: COLLISION_DAMAGE });
-              }
-            }
+        keepTankInBounds(p1);
+        keepTankInBounds(p2);
+
+        const now = performance.now();
+        if (enableCollisionDamage) {
+          if (now - p1.lastCollisionDmgTime > COLLISION_DAMAGE_CD) {
+            p1.lastCollisionDmgTime = now;
+            applyDamage(p1, COLLISION_DAMAGE);
+          }
+          if (now - p2.lastCollisionDmgTime > COLLISION_DAMAGE_CD) {
+            p2.lastCollisionDmgTime = now;
+            applyDamage(p2, COLLISION_DAMAGE);
           }
         }
       }
@@ -1287,26 +1271,24 @@ function movePlayer(player, controls, dt) {
   player.prevZ = player.mesh.position.z;
 
   let speed = player.speed;
-  let turnSpeed = 2.5;
+  let turnSpeed = 2.7;
 
   if (player.scoping) {
     speed *= SCOPE_SPEED_MULT;
     turnSpeed *= SCOPE_TURN_MULT;
   }
 
-  if (player.boosting) {
-    speed *= BOOST_MULTIPLIER;
-  }
+  if (player.boosting) speed *= BOOST_MULTIPLIER;
 
   // Turning
   if (controls.left) player.mesh.rotation.y += turnSpeed * dt;
   if (controls.right) player.mesh.rotation.y -= turnSpeed * dt;
 
-  // Forward/backward
-  const forward = controls.forward ? 1 : (controls.backward ? -1 : 0);
-  if (forward !== 0) {
-    player.mesh.translateZ(forward * speed * dt);
-  }
+  // Forward/backward (match local mode orientation)
+  const moveSpeed = speed * dt;
+  const backSpeed = moveSpeed * 0.75;
+  if (controls.forward) player.mesh.translateZ(-moveSpeed);
+  if (controls.backward) player.mesh.translateZ(backSpeed);
 
   keepTankInBounds(player);
   resolveRockCollisions(player);
@@ -1333,17 +1315,15 @@ function renderView() {
   if (scoping) {
     camera.fov = SCOPE_FOV;
     camera.updateProjectionMatrix();
-    camera.position.set(pos.x, 1.5, pos.z);
-    const lookTarget = new THREE.Vector3(0, 0, 10);
-    lookTarget.applyQuaternion(player.mesh.quaternion);
-    lookTarget.add(pos);
+    const eyePos = player.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+    camera.position.copy(eyePos);
+    const lookTarget = eyePos.clone().add(new THREE.Vector3(0, 0, -1).applyQuaternion(player.mesh.quaternion).multiplyScalar(100));
     camera.lookAt(lookTarget);
     scopeCanvas.classList.add('active');
   } else {
     camera.fov = NORMAL_FOV;
     camera.updateProjectionMatrix();
-    const offset = new THREE.Vector3(0, 5, 12);
-    offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), rot);
+    const offset = new THREE.Vector3(0, 5, 12).applyQuaternion(player.mesh.quaternion);
     camera.position.set(pos.x + offset.x, offset.y, pos.z + offset.z);
     camera.lookAt(pos.x, 1, pos.z);
     scopeCanvas.classList.remove('active');
@@ -1581,7 +1561,7 @@ function handleMessage(data, conn) {
 
     case 'start':
       if (!isHost) {
-        startGame();
+        startGame(data.cfg || null);
       }
       break;
 
@@ -1662,6 +1642,24 @@ function applyRemoteState(state) {
 
   // Update bullets
   // (simplified - in production you'd sync bullet IDs properly)
+
+  if (localPlayerIndex >= 0 && players[localPlayerIndex]) {
+    scoping = !!players[localPlayerIndex].scoping;
+  }
+}
+
+function buildClientInput() {
+  return {
+    f: !!(keys['KeyW'] || keys['ArrowUp']),
+    b: !!(keys['KeyS'] || keys['ArrowDown']),
+    l: !!(keys['KeyA'] || keys['ArrowLeft']),
+    r: !!(keys['KeyD'] || keys['ArrowRight']),
+    fire: !!keys['Space'],
+    mine: !!(keys['KeyE'] && !prevKeys['KeyE']),
+    sat: !!(keys['KeyC'] && !prevKeys['KeyC']),
+    scopeToggle: !!(keys['KeyZ'] && !prevKeys['KeyZ']),
+    weaponToggle: !!(keys['KeyQ'] && !prevKeys['KeyQ'])
+  };
 }
 
 // ============== GAME LOOP ==============
@@ -1696,9 +1694,11 @@ function gameLoop() {
       if (input.sat && player.hasSatellite) {
         fireSatelliteLaser(player);
       }
-      if (input.sc !== player.scoping) {
-        player.scoping = input.sc;
-        scoping = player.index === localPlayerIndex ? input.sc : false;
+      if (input.scopeToggle) {
+        player.scoping = !player.scoping;
+      }
+      if (input.weaponToggle) {
+        toggleWeapon(player);
       }
     }
 
@@ -1778,6 +1778,14 @@ function gameLoop() {
       broadcast(state);
       lastStateBroadcast = now;
     }
+  } else {
+    if (localPlayerIndex >= 0) {
+      const now = performance.now();
+      if (now - lastSentInputAt > 16) {
+        sendToHost({ t: 'input', p: localPlayerIndex, input: buildClientInput() });
+        lastSentInputAt = now;
+      }
+    }
   }
 
   // Render
@@ -1849,7 +1857,7 @@ function showStatus(msg, type) {
 }
 
 // ============== START GAME ==============
-function startGame() {
+function startGame(startCfg = null) {
   gameStarted = true;
   gameStartTime = performance.now();
   const playerCount = Math.max(1, Math.min(4, lobbyState.players.length || 1));
@@ -1882,11 +1890,19 @@ function startGame() {
   localPlayerIndex = myIndex >= 0 ? myIndex : 0;
 
   // Setup game options
-  enableCollisionDamage = document.getElementById('opt-collision').checked;
-  enablePoisonCircle = document.getElementById('opt-poison').checked;
-  enableBulletSpread = document.getElementById('opt-spread').checked;
-  enableMines = document.getElementById('opt-mines').checked;
-  enableSatellite = document.getElementById('opt-satellite').checked;
+  if (startCfg) {
+    enableCollisionDamage = !!startCfg.collision;
+    enablePoisonCircle = !!startCfg.poison;
+    enableBulletSpread = !!startCfg.spread;
+    enableMines = !!startCfg.mines;
+    enableSatellite = !!startCfg.satellite;
+  } else {
+    enableCollisionDamage = document.getElementById('opt-collision').checked;
+    enablePoisonCircle = document.getElementById('opt-poison').checked;
+    enableBulletSpread = document.getElementById('opt-spread').checked;
+    enableMines = document.getElementById('opt-mines').checked;
+    enableSatellite = document.getElementById('opt-satellite').checked;
+  }
 
   // Spawn environment
   spawnRocks();
@@ -1966,8 +1982,15 @@ document.getElementById('btn-cancel-join').addEventListener('click', () => {
 
 document.getElementById('btn-start').addEventListener('click', () => {
   if (isHost && lobbyState.players.length >= 1) {
+    const cfg = {
+      collision: document.getElementById('opt-collision').checked,
+      poison: document.getElementById('opt-poison').checked,
+      spread: document.getElementById('opt-spread').checked,
+      mines: document.getElementById('opt-mines').checked,
+      satellite: document.getElementById('opt-satellite').checked
+    };
     startGame();
-    broadcast({ t: 'start' });
+    broadcast({ t: 'start', cfg });
   }
 });
 
