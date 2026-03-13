@@ -1,0 +1,1997 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>坦克大作战 - 联机版</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+  overflow: hidden; 
+  background: #0a0a0f; 
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  color: #fff;
+}
+#lobby {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 100%);
+  z-index: 1000;
+}
+#lobby.hidden { display: none; }
+.lobby-card {
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 40px;
+  width: 420px;
+  max-width: 90vw;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+.modal-overlay.show { display: flex; }
+.modal-card {
+  background: rgba(20,20,35,0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 16px;
+  padding: 30px;
+  width: 340px;
+  max-width: 90vw;
+  position: relative;
+}
+.modal-card h2 {
+  text-align: center;
+  font-size: 20px;
+  margin-bottom: 24px;
+  color: #fff;
+}
+.modal-card .input-group { margin: 16px 0; }
+.lobby-card h1 {
+  text-align: center;
+  font-size: 28px;
+  margin-bottom: 30px;
+  background: linear-gradient(90deg, #00c6ff, #ff512f);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.btn {
+  width: 100%;
+  padding: 14px 20px;
+  margin: 8px 0;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #00c6ff, #0072ff);
+  color: #fff;
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,198,255,0.3); }
+.btn-secondary {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.btn-secondary:hover { background: rgba(255,255,255,0.15); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.input-group { margin: 15px 0; }
+.input-group label { display: block; margin-bottom: 6px; color: #888; font-size: 14px; }
+.input-group input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.3);
+  color: #fff;
+  font-size: 16px;
+}
+.input-group input:focus { outline: none; border-color: #00c6ff; }
+#room-id-display {
+  text-align: center;
+  padding: 15px;
+  background: rgba(0,198,255,0.1);
+  border-radius: 8px;
+  margin: 15px 0;
+}
+#room-id-display span { font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #00c6ff; }
+#player-list {
+  margin: 20px 0;
+  padding: 15px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 8px;
+  min-height: 100px;
+}
+#player-list h3 { margin-bottom: 10px; font-size: 14px; color: #888; }
+.player-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  margin: 5px 0;
+  background: rgba(255,255,255,0.05);
+  border-radius: 6px;
+}
+.player-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 10px;
+}
+.player-name { flex: 1; }
+.player-status { font-size: 12px; color: #888; }
+#status-msg {
+  text-align: center;
+  padding: 10px;
+  margin-top: 10px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+#status-msg.error { background: rgba(255,81,47,0.2); color: #ff512f; }
+#status-msg.success { background: rgba(0,255,136,0.2); color: #00ff88; }
+#status-msg.info { background: rgba(0,198,255,0.2); color: #00c6ff; }
+#game-options {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+#game-options label {
+  display: flex;
+  align-items: center;
+  margin: 8px 0;
+  cursor: pointer;
+}
+#game-options input[type="checkbox"] {
+  margin-right: 10px;
+  width: 18px;
+  height: 18px;
+  accent-color: #00c6ff;
+}
+#canvas-container { display: none; }
+#canvas-container.active { display: block; }
+#ui { 
+  display: none; 
+  position: fixed; 
+  inset: 0; 
+  pointer-events: none; 
+  z-index: 100;
+}
+#ui.active { display: block; }
+.hud-row {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.p-info {
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 15px 20px;
+  min-width: 200px;
+}
+.p-info .name {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.p-info .hp-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.p-info .hp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00ff88, #00c6ff);
+  transition: width 0.3s;
+}
+.p-info .weapon {
+  font-size: 12px;
+  color: #aaa;
+}
+.p-info .weapon span { color: #fff; font-weight: bold; }
+.minimap-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 180px;
+  height: 180px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(10px);
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.2);
+  overflow: hidden;
+}
+#minimap { width: 100%; height: 100%; }
+.winner-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.8);
+  z-index: 200;
+}
+.winner-overlay.show { display: flex; }
+.winner-overlay h1 {
+  font-size: 64px;
+  background: linear-gradient(90deg, #ffd700, #ffaa00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 30px;
+}
+.winner-overlay button {
+  padding: 15px 40px;
+  font-size: 18px;
+}
+#scope-canvas, #satellite-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+}
+#scope-canvas.active, #satellite-canvas.active { display: block; }
+.controls-hint {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(10px);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 12px;
+  color: #888;
+}
+.controls-hint kbd {
+  background: rgba(255,255,255,0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin: 0 2px;
+}
+</style>
+</head>
+<body>
+
+<div id="lobby">
+  <div class="lobby-card" id="lobby-main">
+    <h1>坦克大作战 - 联机版</h1>
+    <button class="btn btn-primary" id="btn-create">创建房间</button>
+    <button class="btn btn-secondary" id="btn-join">加入房间</button>
+  </div>
+</div>
+
+<!-- Create Room Modal -->
+<div class="modal-overlay" id="modal-create">
+  <div class="modal-card">
+    <h2>创建房间</h2>
+    <div id="room-id-display">房间ID: <span id="my-room-id">...</span></div>
+    <div id="player-list">
+      <h3>玩家列表</h3>
+      <div id="players-container"></div>
+    </div>
+    <div id="game-options">
+      <label><input type="checkbox" id="opt-collision" checked> 碰撞伤害</label>
+      <label><input type="checkbox" id="opt-poison" checked> 毒圈</label>
+      <label><input type="checkbox" id="opt-spread" checked> 子弹散布</label>
+      <label><input type="checkbox" id="opt-mines" checked> 地雷系统</label>
+      <label><input type="checkbox" id="opt-satellite" checked> 卫星激光</label>
+    </div>
+    <button class="btn btn-primary" id="btn-start" disabled>等待玩家加入...</button>
+    <button class="btn btn-secondary" id="btn-back">返回</button>
+  </div>
+</div>
+
+<!-- Join Room Modal -->
+<div class="modal-overlay" id="modal-join">
+  <div class="modal-card">
+    <h2>加入房间</h2>
+    <div class="input-group">
+      <label>房间ID</label>
+      <input type="text" id="join-room-id" placeholder="输入房间ID" maxlength="6">
+    </div>
+    <div class="input-group">
+      <label>你的昵称</label>
+      <input type="text" id="player-name" placeholder="输入昵称" maxlength="12">
+    </div>
+    <button class="btn btn-primary" id="btn-connect">连接</button>
+    <button class="btn btn-secondary" id="btn-cancel-join">返回</button>
+    <div id="status-msg"></div>
+  </div>
+</div>
+
+<div id="canvas-container"></div>
+<canvas id="scope-canvas"></canvas>
+<canvas id="satellite-canvas"></canvas>
+
+<div id="ui">
+  <div class="hud-row">
+    <div class="p-info" id="p-info-local">
+      <div class="name"><span class="player-dot"></span><span class="player-name">你</span></div>
+      <div class="hp-bar"><div class="hp-fill" style="width:100%"></div></div>
+      <div class="weapon">武器: <span>机枪</span></div>
+    </div>
+  </div>
+  <div class="minimap-container">
+    <canvas id="minimap"></canvas>
+  </div>
+  <div class="controls-hint">
+    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 
+    <kbd>Space</kbd> 射击 
+    <kbd>Q</kbd> 切换武器 
+    <kbd>E</kbd> 放置地雷 
+    <kbd>Z</kbd> 瞄准镜 
+    <kbd>C</kbd> 卫星激光
+  </div>
+</div>
+
+<div class="winner-overlay" id="winner-overlay">
+  <h1 id="winner-text">蓝色坦克 获胜!</h1>
+  <button class="btn btn-primary" id="btn-restart">再来一局</button>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ============== CONSTANTS ==============
+const MAP_HALF = 100;
+const TANK_RADIUS = 1.4;
+const TANK_HALF_W = 1.1;
+const TANK_HALF_L = 1.4;
+const MINE_RADIUS = 0.8;
+const MINE_DAMAGE = 25;
+const MINE_COOLDOWN = 5000;
+const DOUBLE_TAP_MS = 250;
+const BOOST_DURATION = 500;
+const BOOST_MULTIPLIER = 2.7;
+const COLLISION_DAMAGE = 100/6;
+const COLLISION_DAMAGE_CD = 1000;
+const POISON_DURATION = 150;
+const MAX_RADIUS = Math.sqrt(200**2);
+const HEALTH_PACK_HEAL = 100/3;
+const HEALTH_PACK_RESPAWN = 15000;
+const MINIMAP_RADIUS = 65;
+const MG_SPREAD_ANGLE = 10 * Math.PI / 180;
+const CANNON_SPREAD = 5 * Math.PI / 180;
+const SCOPE_FOV = 30;
+const NORMAL_FOV = 60;
+const SCOPE_SPEED_MULT = 1/3;
+const SCOPE_TURN_MULT = 1/3;
+const SATELLITE_TARGET_SPEED = 40;
+const SATELLITE_RADIUS = 10;
+const SATELLITE_DAMAGE = 75;
+const SATELLITE_EFFECT_MS = 1500;
+const SATELLITE_RESPAWN = 30000;
+
+const WEAPONS = {
+  mg: { name: '机枪', dmg: 1, cd: 50, speed: 120, color: 0xff4400, size: 0.15 },
+  cannon: { name: '加农炮', dmg: 25, cd: 800, speed: 45, color: 0xffaa00, size: 0.4 }
+};
+
+const PLAYER_COLORS = [0x00c6ff, 0xff512f, 0x00ff88, 0xffaa00];
+const PLAYER_NAMES = ['蓝色坦克', '红色坦克', '绿色坦克', '橙色坦克'];
+const SPAWN_POSITIONS = [[-30,0,0], [30,0,0], [0,0,-30], [0,0,30]];
+
+// ============== GAME STATE ==============
+let scene, renderer, camera;
+let players = [];
+let bullets = [];
+let mines = [];
+let rocks = [];
+let healthPacks = [];
+let grassPatches = [];
+let poisonCircle;
+let satellitePickup;
+let clock;
+
+let peer = null;
+let connections = [];
+let hostConnection = null;
+let isHost = false;
+let localPlayerIndex = -1;
+let gameStarted = false;
+let lobbyState = { players: [] };
+
+let keys = {};
+let prevKeys = {};
+let lastShot = 0;
+let lastMineTime = 0;
+let lastTapKey = '';
+let lastTapTime = 0;
+let scoping = false;
+let usingSatellite = false;
+
+let enableCollisionDamage = true;
+let enablePoisonCircle = true;
+let enableBulletSpread = true;
+let enableMines = true;
+let enableSatellite = true;
+
+let scopeCanvas, scopeCtx;
+let satelliteCanvas, satelliteCtx;
+let minimapCanvas, minimapCtx;
+
+// ============== THREE.JS SETUP ==============
+function initThree() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a1a2e);
+  scene.fog = new THREE.Fog(0x1a1a2e, 80, 200);
+
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  camera = new THREE.PerspectiveCamera(NORMAL_FOV, w/h, 0.1, 500);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+  // Lighting
+  const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+  scene.add(ambient);
+
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
+  dirLight.position.set(50, 100, 50);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.width = 2048;
+  dirLight.shadow.mapSize.height = 2048;
+  dirLight.shadow.camera.near = 10;
+  dirLight.shadow.camera.far = 300;
+  dirLight.shadow.camera.left = -100;
+  dirLight.shadow.camera.right = 100;
+  dirLight.shadow.camera.top = 100;
+  dirLight.shadow.camera.bottom = -100;
+  scene.add(dirLight);
+
+  // Floor
+  const floorGeo = new THREE.PlaneGeometry(200, 200);
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x2d5a27 });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI/2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // Grid
+  const grid = new THREE.GridHelper(200, 40, 0x444444, 0x333333);
+  scene.add(grid);
+
+  // Canvas setup
+  scopeCanvas = document.getElementById('scope-canvas');
+  scopeCtx = scopeCanvas.getContext('2d');
+  satelliteCanvas = document.getElementById('satellite-canvas');
+  satelliteCtx = satelliteCanvas.getContext('2d');
+  minimapCanvas = document.getElementById('minimap');
+  minimapCtx = minimapCanvas.getContext('2d');
+
+  clock = new THREE.Clock();
+
+  window.addEventListener('resize', onResize);
+}
+
+function onResize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+
+// ============== PLAYER CREATION ==============
+function createPlayerState(index) {
+  return {
+    index: index,
+    hp: 100,
+    weapon: 'mg',
+    color: PLAYER_COLORS[index],
+    name: PLAYER_NAMES[index],
+    mesh: null,
+    muzzle: null,
+    hitT: 0,
+    shake: 0,
+    speed: 16,
+    boosting: false,
+    boostEndTime: 0,
+    lastTapKey: '',
+    lastTapTime: 0,
+    lastShot: 0,
+    lastMineTime: 0,
+    lastCollisionDmgTime: 0,
+    inGrass: false,
+    scoping: false,
+    usingSatellite: false,
+    satelliteTarget: { x: 0, z: 0 },
+    satelliteFiring: false,
+    satelliteFireTime: 0,
+    satelliteBeam: null,
+    satelliteDamageApplied: false,
+    alive: true,
+    x: 0, z: 0, rotation: 0,
+    prevX: 0, prevZ: 0
+  };
+}
+
+function createTankMesh(color) {
+  const group = new THREE.Group();
+
+  // Body
+  const bodyGeo = new THREE.BoxGeometry(2.2, 0.8, 2.8);
+  const bodyMat = new THREE.MeshStandardMaterial({ color });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = 0.4;
+  body.castShadow = true;
+  group.add(body);
+
+  // Turret
+  const turretGeo = new THREE.BoxGeometry(1.4, 0.6, 1.4);
+  const turretMat = new THREE.MeshStandardMaterial({ color: darkenColor(color, 0.8) });
+  const turret = new THREE.Mesh(turretGeo, turretMat);
+  turret.position.y = 1.0;
+  turret.castShadow = true;
+  group.add(turret);
+
+  // Gun
+  const gunGeo = new THREE.CylinderGeometry(0.12, 0.12, 2.2, 8);
+  const gunMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+  const gun = new THREE.Mesh(gunGeo, gunMat);
+  gun.rotation.x = Math.PI/2;
+  gun.position.set(0, 1.0, 1.1);
+  group.add(gun);
+
+  // Muzzle
+  const muzzle = new THREE.Object3D();
+  muzzle.position.set(0, 1.0, 2.2);
+  group.add(muzzle);
+
+  // Hatch
+  const hatchGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 8);
+  const hatchMat = new THREE.MeshStandardMaterial({ color: darkenColor(color, 0.7) });
+  const hatch = new THREE.Mesh(hatchGeo, hatchMat);
+  hatch.position.y = 1.35;
+  group.add(hatch);
+
+  return { group, muzzle };
+}
+
+function darkenColor(hex, factor) {
+  const r = Math.floor((hex >> 16) * factor);
+  const g = Math.floor(((hex >> 8) & 0xff) * factor);
+  const b = Math.floor((hex & 0xff) * factor);
+  return (r << 16) | (g << 8) | b;
+}
+
+// ============== ENVIRONMENT ==============
+function spawnRocks() {
+  rocks = [];
+  for (let i = 0; i < 20; i++) {
+    let x, z, valid;
+    do {
+      valid = true;
+      x = (Math.random() - 0.5) * 176;
+      z = (Math.random() - 0.5) * 176;
+      if (Math.sqrt(x*x + z*z) < 25) valid = false;
+      for (const rock of rocks) {
+        if (Math.sqrt((x-rock.x)**2 + (z-rock.z)**2) < 8) valid = false;
+      }
+    } while (!valid);
+
+    const scale = 1.5 + Math.random() * 1.5;
+    const geo = new THREE.DodecahedronGeometry(2 * scale);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.9 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, scale, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    rocks.push({ mesh, x, z, radius: scale * 2 });
+  }
+}
+
+function createPoisonCircle() {
+  const geo = new THREE.RingGeometry(MAX_RADIUS - 5, MAX_RADIUS, 64);
+  const mat = new THREE.MeshBasicMaterial({ 
+    color: 0x8800ff, 
+    transparent: true, 
+    opacity: 0.2,
+    side: THREE.DoubleSide 
+  });
+  poisonCircle = new THREE.Mesh(geo, mat);
+  poisonCircle.rotation.x = -Math.PI/2;
+  poisonCircle.position.y = 0.1;
+  scene.add(poisonCircle);
+}
+
+function createHealthPack(x, z) {
+  const group = new THREE.Group();
+  const boxGeo = new THREE.BoxGeometry(1.5, 1, 1.5);
+  const boxMat = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+  const box = new THREE.Mesh(boxGeo, boxMat);
+  box.castShadow = true;
+  group.add(box);
+
+  // Cross
+  const crossH = new THREE.MeshStandardMaterial({ color: 0xffffff });
+  const v1 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.15, 1), crossH);
+  v1.position.y = 0.5;
+  group.add(v1);
+  const v2 = new THREE.Mesh(new THREE.BoxGeometry(1, 0.15, 0.3), crossH);
+  v2.position.y = 0.5;
+  group.add(v2);
+
+  group.position.set(x, 0.5, z);
+  scene.add(group);
+  return { mesh: group, x, z, bobOffset: Math.random() * Math.PI * 2 };
+}
+
+function spawnHealthPacks() {
+  healthPacks = [];
+  for (let i = 0; i < 3; i++) {
+    const pos = findSafeSpawnPosition(25, 8, 10, 8);
+    healthPacks.push(createHealthPack(pos.x, pos.z));
+  }
+}
+
+function createGrassPatch(x, z, radius) {
+  const group = new THREE.Group();
+  const baseGeo = new THREE.CylinderGeometry(radius, radius, 0.1, 16);
+  const baseMat = new THREE.MeshStandardMaterial({ color: 0x228822 });
+  const base = new THREE.Mesh(baseGeo, baseMat);
+  base.position.y = 0.05;
+  group.add(base);
+
+  for (let i = 0; i < 18; i++) {
+    const angle = (i / 18) * Math.PI * 2 + Math.random() * 0.3;
+    const dist = Math.random() * (radius - 0.3);
+    const h = 0.8 + Math.random() * 0.6;
+    const bladeGeo = new THREE.ConeGeometry(0.1, h, 4);
+    const bladeMat = new THREE.MeshStandardMaterial({ color: 0x44aa44 });
+    const blade = new THREE.Mesh(bladeGeo, bladeMat);
+    blade.position.set(Math.cos(angle) * dist, h/2, Math.sin(angle) * dist);
+    blade.rotation.x = (Math.random() - 0.5) * 0.2;
+    blade.rotation.z = (Math.random() - 0.5) * 0.2;
+    group.add(blade);
+  }
+
+  group.position.set(x, 0, z);
+  scene.add(group);
+  return { x, z, radius };
+}
+
+function spawnGrassPatches() {
+  grassPatches = [];
+  const count = 8 + Math.floor(Math.random() * 5);
+  for (let i = 0; i < count; i++) {
+    const pos = findSafeSpawnPosition(20, 5, 8, 5);
+    const radius = 3 + Math.random() * 2;
+    grassPatches.push(createGrassPatch(pos.x, pos.z, radius));
+  }
+}
+
+function findSafeSpawnPosition(minFromCenter, minRockDist, minGrassDist, minPackDist) {
+  let x, z, valid;
+  let attempts = 0;
+  do {
+    valid = true;
+    x = (Math.random() - 0.5) * 160;
+    z = (Math.random() - 0.5) * 160;
+    if (Math.sqrt(x*x + z*z) < minFromCenter) valid = false;
+    for (const rock of rocks) {
+      if (Math.sqrt((x-rock.x)**2 + (z-rock.z)**2) < minRockDist + rock.radius) valid = false;
+    }
+    for (const patch of grassPatches) {
+      if (Math.sqrt((x-patch.x)**2 + (z-patch.z)**2) < minGrassDist + patch.radius) valid = false;
+    }
+    for (const pack of healthPacks) {
+      if (Math.sqrt((x-pack.x)**2 + (z-pack.z)**2) < minPackDist) valid = false;
+    }
+    attempts++;
+  } while (!valid && attempts < 100);
+  return { x, z };
+}
+
+function createSatellitePickup(x, z) {
+  const group = new THREE.Group();
+
+  const octaGeo = new THREE.OctahedronGeometry(0.8);
+  const octaMat = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xffaa00, emissiveIntensity: 0.5 });
+  const octa = new THREE.Mesh(octaGeo, octaMat);
+  octa.position.y = 1.5;
+  group.add(octa);
+
+  const torusGeo = new THREE.TorusGeometry(1.2, 0.1, 8, 16);
+  const torusMat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.3 });
+  const torus = new THREE.Mesh(torusGeo, torusMat);
+  torus.rotation.x = Math.PI/2;
+  torus.position.y = 1.5;
+  group.add(torus);
+
+  const glowGeo = new THREE.SphereGeometry(2, 16, 16);
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.1 });
+  const glow = new THREE.Mesh(glowGeo, glowMat);
+  glow.position.y = 1.5;
+  group.add(glow);
+
+  group.position.set(x, 0, z);
+  scene.add(group);
+  return { mesh: group, x, z, rotOffset: Math.random() * Math.PI * 2 };
+}
+
+function spawnSatellitePickup() {
+  const pos = findSafeSpawnPosition(30, 8, 10, 8);
+  satellitePickup = createSatellitePickup(pos.x, pos.z);
+}
+
+// ============== GAME MECHANICS ==============
+function applyDamage(player, dmg) {
+  if (!player.alive) return;
+  player.hp -= dmg;
+  player.hitT = 1;
+  if (player.hp <= 0) {
+    player.hp = 0;
+    player.alive = false;
+    if (player.mesh) {
+      player.mesh.visible = false;
+    }
+    if (isHost) {
+      checkWinner();
+    }
+  }
+  updateHUD();
+}
+
+function checkWinner() {
+  const alivePlayers = players.filter(p => p.alive);
+  if (alivePlayers.length <= 1 && isHost) {
+    const winner = alivePlayers[0];
+    if (winner) {
+      broadcast({ t: 'win', w: winner.index });
+      showWinner(winner.index);
+    } else {
+      broadcast({ t: 'win', w: -1 });
+      showWinner(-1);
+    }
+  }
+}
+
+function showWinner(winnerIndex) {
+  const overlay = document.getElementById('winner-overlay');
+  const text = document.getElementById('winner-text');
+  if (winnerIndex >= 0) {
+    text.textContent = PLAYER_NAMES[winnerIndex] + ' 获胜!';
+  } else {
+    text.textContent = '平局!';
+  }
+  overlay.classList.add('show');
+}
+
+function toggleWeapon(player) {
+  player.weapon = player.weapon === 'mg' ? 'cannon' : 'mg';
+  updateHUD();
+}
+
+function fire(player) {
+  const now = performance.now();
+  const weapon = WEAPONS[player.weapon];
+  if (now - player.lastShot < weapon.cd) return;
+  player.lastShot = now;
+
+  const spread = player.weapon === 'mg' ? MG_SPREAD_ANGLE : CANNON_SPREAD;
+  const spreadAngle = enableBulletSpread ? (Math.random() - 0.5) * spread : 0;
+  
+  const dir = new THREE.Vector3(0, 0, 1);
+  dir.applyQuaternion(player.mesh.quaternion);
+  dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), spreadAngle);
+
+  const muzzlePos = new THREE.Vector3();
+  player.muzzle.getWorldPosition(muzzlePos);
+
+  const bullet = {
+    x: muzzlePos.x,
+    z: muzzlePos.z,
+    vx: dir.x * weapon.speed,
+    vz: dir.z * weapon.speed,
+    dmg: weapon.dmg,
+    color: weapon.color,
+    size: weapon.size,
+    owner: player.index,
+    life: 0
+  };
+
+  const geo = new THREE.SphereGeometry(weapon.size, 8, 8);
+  const mat = new THREE.MeshBasicMaterial({ color: weapon.color });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(bullet.x, 0.8, bullet.z);
+  scene.add(mesh);
+  bullet.mesh = mesh;
+
+  bullets.push(bullet);
+  broadcast({ t: 'fire', p: player.index, x: muzzlePos.x, z: muzzlePos.z, vx: bullet.vx, vz: bullet.vz, w: player.weapon });
+}
+
+function createMine(player) {
+  const now = performance.now();
+  if (now - player.lastMineTime < MINE_COOLDOWN) return;
+  player.lastMineTime = now;
+
+  const pos = player.mesh.position.clone();
+  pos.z -= 2;
+  pos.applyQuaternion(player.mesh.quaternion);
+
+  const mine = {
+    x: pos.x,
+    z: pos.z,
+    owner: player.index,
+    armed: false,
+    armedAt: now + 250,
+    mesh: null
+  };
+
+  const geo = new THREE.CylinderGeometry(0.5, 0.6, 0.3, 8);
+  const mat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(mine.x, 0.15, mine.z);
+  mesh.visible = false;
+  scene.add(mesh);
+  mine.mesh = mesh;
+
+  mines.push(mine);
+  broadcast({ t: 'mine', p: player.index, x: mine.x, z: mine.z });
+}
+
+function fireSatelliteLaser(player) {
+  if (player.usingSatellite || !enableSatellite) return;
+  player.usingSatellite = true;
+  player.satelliteFireTime = performance.now();
+  player.satelliteDamageApplied = false;
+
+  const beam = createSatelliteBeamMesh();
+  scene.add(beam);
+  player.satelliteBeam = beam;
+
+  broadcast({ t: 'sat', p: player.index });
+}
+
+function createSatelliteBeamMesh() {
+  const group = new THREE.Group();
+  
+  const beamGeo = new THREE.CylinderGeometry(0.3, 2, 200, 8);
+  const beamMat = new THREE.MeshBasicMaterial({ 
+    color: 0xff0000, 
+    transparent: true, 
+    opacity: 0.3 
+  });
+  const beam = new THREE.Mesh(beamGeo, beamMat);
+  beam.position.y = 100;
+  group.add(beam);
+
+  const coreGeo = new THREE.CylinderGeometry(0.1, 0.8, 200, 8);
+  const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const core = new THREE.Mesh(coreGeo, coreMat);
+  core.position.y = 100;
+  group.add(core);
+
+  const impactGeo = new THREE.RingGeometry(SATELLITE_RADIUS - 2, SATELLITE_RADIUS, 32);
+  const impactMat = new THREE.MeshBasicMaterial({ 
+    color: 0xff0000, 
+    transparent: true, 
+    opacity: 0.5,
+    side: THREE.DoubleSide 
+  });
+  const impact = new THREE.Mesh(impactGeo, impactMat);
+  impact.rotation.x = -Math.PI/2;
+  impact.position.y = 0.2;
+  group.add(impact);
+
+  return group;
+}
+
+// ============== COLLISION ==============
+function keepTankInBounds(player) {
+  const limit = MAP_HALF - 2;
+  if (player.mesh.position.x < -limit) player.mesh.position.x = -limit;
+  if (player.mesh.position.x > limit) player.mesh.position.x = limit;
+  if (player.mesh.position.z < -limit) player.mesh.position.z = -limit;
+  if (player.mesh.position.z > limit) player.mesh.position.z = limit;
+}
+
+function getTankOBB(player) {
+  const pos = player.mesh.position;
+  const rot = player.mesh.rotation.y;
+  const cx = pos.x;
+  const cz = pos.z;
+  const cos = Math.cos(rot);
+  const sin = Math.sin(rot);
+  return {
+    cx, cz,
+    axX: cos * TANK_HALF_L + sin * TANK_HALF_W,
+    axZ: -sin * TANK_HALF_L + cos * TANK_HALF_W,
+    azX: cos * TANK_HALF_W - sin * TANK_HALF_L,
+    azZ: sin * TANK_HALF_W + cos * TANK_HALF_L
+  };
+}
+
+function obbOverlap(a, b) {
+  const axes = [
+    { x: a.axX, z: a.axZ },
+    { x: a.azX, z: a.azZ },
+    { x: b.axX, z: b.axZ },
+    { x: b.azX, z: b.azZ }
+  ];
+
+  let minOverlap = Infinity;
+  let minAxis = null;
+
+  for (const axis of axes) {
+    const len = Math.sqrt(axis.x * axis.x + axis.z * axis.z);
+    if (len < 0.001) continue;
+    const nx = axis.x / len;
+    const nz = axis.z / len;
+
+    const proj = (obj) => {
+      return (obj.cx - a.cx) * nx + (obj.cz - a.cz) * nz;
+    };
+
+    const aMin = proj(a) - (Math.abs(a.axX * nx + a.axZ * nz) + Math.abs(a.azX * nx + a.azZ * nz));
+    const aMax = proj(a) + (Math.abs(a.axX * nx + a.axZ * nz) + Math.abs(a.azX * nx + a.azZ * nz));
+    const bMin = proj(b) - (Math.abs(b.axX * nx + b.axZ * nz) + Math.abs(b.azX * nx + b.azZ * nz));
+    const bMax = proj(b) + (Math.abs(b.axX * nx + b.axZ * nz) + Math.abs(b.azX * nx + b.azZ * nz));
+
+    const overlap = Math.min(aMax - bMin, bMax - aMin);
+    if (overlap < minOverlap) {
+      minOverlap = overlap;
+      minAxis = { x: nx, z: nz };
+    }
+  }
+
+  return { overlap: minOverlap, nx: minAxis.x, nz: minAxis.z };
+}
+
+function resolveTankCollisions() {
+  const alivePlayers = players.filter(p => p.alive && p.mesh);
+  for (let iter = 0; iter < 4; iter++) {
+    for (let i = 0; i < alivePlayers.length; i++) {
+      for (let j = i + 1; j < alivePlayers.length; j++) {
+        const p1 = alivePlayers[i];
+        const p2 = alivePlayers[j];
+        
+        const obb1 = getTankOBB(p1);
+        const obb2 = getTankOBB(p2);
+        const result = obbOverlap(obb1, obb2);
+
+        if (result.overlap > 0) {
+          const dx = p2.mesh.position.x - p1.mesh.position.x;
+          const dz = p2.mesh.position.z - p1.mesh.position.z;
+          const dist = Math.sqrt(dx * dx + dz * dz);
+          
+          if (dist > 0.01) {
+            const nx = dx / dist;
+            const nz = dz / dist;
+            const push = result.overlap + 0.02;
+            
+            p1.mesh.position.x -= nx * push * 0.5;
+            p1.mesh.position.z -= nz * push * 0.5;
+            p2.mesh.position.x += nx * push * 0.5;
+            p2.mesh.position.z += nz * push * 0.5;
+
+            keepTankInBounds(p1);
+            keepTankInBounds(p2);
+
+            // Apply collision damage
+            const now = performance.now();
+            if (enableCollisionDamage) {
+              if (now - p1.lastCollisionDmgTime > COLLISION_DAMAGE_CD) {
+                p1.lastCollisionDmgTime = now;
+                applyDamage(p1, COLLISION_DAMAGE);
+                broadcast({ t: 'dmg', p: p1.index, d: COLLISION_DAMAGE });
+              }
+              if (now - p2.lastCollisionDmgTime > COLLISION_DAMAGE_CD) {
+                p2.lastCollisionDmgTime = now;
+                applyDamage(p2, COLLISION_DAMAGE);
+                broadcast({ t: 'dmg', p: p2.index, d: COLLISION_DAMAGE });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+function resolveRockCollisions(player) {
+  const pos = player.mesh.position;
+  for (const rock of rocks) {
+    const dx = pos.x - rock.x;
+    const dz = pos.z - rock.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    const minDist = TANK_RADIUS + rock.radius;
+    
+    if (dist < minDist && dist > 0.01) {
+      const nx = dx / dist;
+      const nz = dz / dist;
+      pos.x = rock.x + nx * minDist;
+      pos.z = rock.z + nz * minDist;
+    }
+  }
+}
+
+// ============== UPDATE FUNCTIONS ==============
+function updateGrassStealth() {
+  for (const player of players) {
+    if (!player.alive || !player.mesh) continue;
+    let inGrass = false;
+    for (const patch of grassPatches) {
+      const dx = player.mesh.position.x - patch.x;
+      const dz = player.mesh.position.z - patch.z;
+      if (Math.sqrt(dx * dx + dz * dz) < patch.radius) {
+        inGrass = true;
+        break;
+      }
+    }
+    player.inGrass = inGrass;
+    
+    // Apply stealth visual
+    const enemyOpacity = inGrass ? 0.12 : 1.0;
+    player.mesh.traverse(child => {
+      if (child.isMesh && child.material) {
+        child.material.transparent = inGrass;
+        child.material.opacity = enemyOpacity;
+      }
+    });
+  }
+}
+
+function updateHealthPacks(dt) {
+  const now = performance.now();
+  for (const pack of healthPacks) {
+    pack.mesh.position.y = 0.5 + Math.sin(now * 0.003 + pack.bobOffset) * 0.1;
+    pack.mesh.rotation.y += dt;
+
+    for (const player of players) {
+      if (!player.alive || !player.mesh) continue;
+      const dx = player.mesh.position.x - pack.x;
+      const dz = player.mesh.position.z - pack.z;
+      if (Math.sqrt(dx * dx + dz * dz) < 3) {
+        if (player.hp < 100) {
+          player.hp = Math.min(100, player.hp + HEALTH_PACK_HEAL);
+          pack.respawnAt = now + HEALTH_PACK_RESPAWN;
+          pack.mesh.visible = false;
+          updateHUD();
+          broadcast({ t: 'heal', p: player.index, h: player.hp });
+        }
+      }
+    }
+
+    if (pack.respawnAt && now > pack.respawnAt && !pack.mesh.visible) {
+      pack.mesh.visible = true;
+      pack.respawnAt = null;
+    }
+  }
+}
+
+function updateMines(dt) {
+  const now = performance.now();
+  for (const mine of mines) {
+    if (!mine.armed && now > mine.armedAt) {
+      mine.armed = true;
+      if (mine.mesh) mine.mesh.visible = true;
+    }
+
+    if (mine.armed) {
+      mine.mesh.rotation.y += dt * 2;
+      
+      for (const player of players) {
+        if (!player.alive || !player.mesh || player.index === mine.owner) continue;
+        const dx = player.mesh.position.x - mine.x;
+        const dz = player.mesh.position.z - mine.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist < TANK_RADIUS + MINE_RADIUS) {
+          applyDamage(player, MINE_DAMAGE);
+          broadcast({ t: 'dmg', p: player.index, d: MINE_DAMAGE, m: true });
+          
+          mine.mesh.visible = false;
+          mine.armed = false;
+          mine.explodedAt = now + 2000;
+          break;
+        }
+      }
+    }
+
+    if (mine.explodedAt && now > mine.explodedAt) {
+      if (mine.mesh) scene.remove(mine.mesh);
+      const idx = mines.indexOf(mine);
+      if (idx >= 0) mines.splice(idx, 1);
+    }
+  }
+}
+
+function updateSatellitePickup(dt) {
+  if (!satellitePickup) return;
+  
+  const now = performance.now();
+  satellitePickup.mesh.rotation.y += dt;
+  satellitePickup.mesh.children[1].rotation.z += dt * 2;
+
+  for (const player of players) {
+    if (!player.alive || !player.mesh || player.usingSatellite) continue;
+    const dx = player.mesh.position.x - satellitePickup.x;
+    const dz = player.mesh.position.z - satellitePickup.z;
+    if (Math.sqrt(dx * dx + dz * dz) < 3) {
+      player.hasSatellite = true;
+      satellitePickup.respawnAt = now + SATELLITE_RESPAWN;
+      satellitePickup.mesh.visible = false;
+      broadcast({ t: 'satpick', p: player.index });
+    }
+  }
+
+  if (satellitePickup.respawnAt && now > satellitePickup.respawnAt && !satellitePickup.mesh.visible) {
+    satellitePickup.mesh.visible = true;
+    satellitePickup.respawnAt = null;
+  }
+}
+
+function updateSatellitePlayers(dt) {
+  for (const player of players) {
+    if (!player.usingSatellite || !player.satelliteBeam) continue;
+
+    const now = performance.now();
+    if (now - player.satelliteFireTime > SATELLITE_EFFECT_MS) {
+      scene.remove(player.satelliteBeam);
+      player.satelliteBeam = null;
+      player.usingSatellite = false;
+      continue;
+    }
+
+    // Move target with WASD
+    const targetSpeed = SATELLITE_TARGET_SPEED * dt;
+    if (keys['KeyW'] || keys['ArrowUp']) player.satelliteTarget.z -= targetSpeed;
+    if (keys['KeyS'] || keys['ArrowDown']) player.satelliteTarget.z += targetSpeed;
+    if (keys['KeyA'] || keys['ArrowLeft']) player.satelliteTarget.x -= targetSpeed;
+    if (keys['KeyD'] || keys['ArrowRight']) player.satelliteTarget.x += targetSpeed;
+
+    // Clamp target
+    player.satelliteTarget.x = Math.max(-MAP_HALF + 10, Math.min(MAP_HALF - 10, player.satelliteTarget.x));
+    player.satelliteTarget.z = Math.max(-MAP_HALF + 10, Math.min(MAP_HALF - 10, player.satelliteTarget.z));
+
+    // Update beam position
+    player.satelliteBeam.position.set(player.satelliteTarget.x, 0, player.satelliteTarget.z);
+
+    // Apply damage
+    if (!player.satelliteDamageApplied) {
+      for (const target of players) {
+        if (!target.alive || target.index === player.index) continue;
+        const dx = target.mesh.position.x - player.satelliteTarget.x;
+        const dz = target.mesh.position.z - player.satelliteTarget.z;
+        if (Math.sqrt(dx * dx + dz * dz) < SATELLITE_RADIUS) {
+          applyDamage(target, SATELLITE_DAMAGE);
+          broadcast({ t: 'dmg', p: target.index, d: SATELLITE_DAMAGE, s: true });
+        }
+      }
+      player.satelliteDamageApplied = true;
+    }
+  }
+}
+
+function updatePoison(dt) {
+  if (!enablePoisonCircle || !poisonCircle) return;
+  
+  const now = performance.now();
+  const elapsed = (now - gameStartTime) / 1000;
+  
+  if (elapsed < POISON_DURATION) {
+    const currentRadius = MAX_RADIUS - (elapsed / POISON_DURATION) * (MAX_RADIUS - 30);
+    poisonCircle.scale.set(currentRadius / MAX_RADIUS, currentRadius / MAX_RADIUS, 1);
+    
+    // Damage outside circle
+    const distFromCenter = (p) => Math.sqrt(p.mesh.position.x ** 2 + p.mesh.position.z ** 2);
+    for (const player of players) {
+      if (!player.alive || !player.mesh) continue;
+      if (distFromCenter(player) > currentRadius) {
+        applyDamage(player, 5 * dt);
+        broadcast({ t: 'dmg', p: player.index, d: 5 * dt, poison: true });
+      }
+    }
+  } else {
+    poisonCircle.visible = false;
+  }
+}
+
+function updateBullets(dt) {
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.x += b.vx * dt;
+    b.z += b.vz * dt;
+    b.life += dt;
+    b.mesh.position.set(b.x, 0.8, b.z);
+
+    // Out of bounds
+    if (Math.abs(b.x) > 150 || Math.abs(b.z) > 150) {
+      scene.remove(b.mesh);
+      bullets.splice(i, 1);
+      continue;
+    }
+
+    // Hit players
+    for (const player of players) {
+      if (!player.alive || !player.mesh || player.index === b.owner) continue;
+      const dx = player.mesh.position.x - b.x;
+      const dz = player.mesh.position.z - b.z;
+      if (Math.sqrt(dx * dx + dz * dz) < 2.2) {
+        applyDamage(player, b.dmg);
+        broadcast({ t: 'dmg', p: player.index, d: b.dmg, b: true });
+        scene.remove(b.mesh);
+        bullets.splice(i, 1);
+        break;
+      }
+    }
+  }
+}
+
+function updateHitFlash(dt) {
+  for (const player of players) {
+    if (player.hitT > 0) {
+      player.hitT -= dt * 5;
+      if (player.mesh) {
+        const flash = Math.max(0, player.hitT);
+        player.mesh.traverse(child => {
+          if (child.isMesh && child.material && child.material.emissive) {
+            child.material.emissive.setRGB(flash, flash, flash);
+          }
+        });
+      }
+    }
+  }
+}
+
+// ============== MOVEMENT ==============
+function movePlayer(player, controls, dt) {
+  if (!player.alive || !player.mesh) return;
+
+  player.prevX = player.mesh.position.x;
+  player.prevZ = player.mesh.position.z;
+
+  let speed = player.speed;
+  let turnSpeed = 2.5;
+
+  if (player.scoping) {
+    speed *= SCOPE_SPEED_MULT;
+    turnSpeed *= SCOPE_TURN_MULT;
+  }
+
+  if (player.boosting) {
+    speed *= BOOST_MULTIPLIER;
+  }
+
+  // Turning
+  if (controls.left) player.mesh.rotation.y += turnSpeed * dt;
+  if (controls.right) player.mesh.rotation.y -= turnSpeed * dt;
+
+  // Forward/backward
+  const forward = controls.forward ? 1 : (controls.backward ? -1 : 0);
+  if (forward !== 0) {
+    player.mesh.translateZ(forward * speed * dt);
+  }
+
+  keepTankInBounds(player);
+  resolveRockCollisions(player);
+
+  // Sync position
+  player.x = player.mesh.position.x;
+  player.z = player.mesh.position.z;
+  player.rotation = player.mesh.rotation.y;
+}
+
+// ============== RENDERING ==============
+function renderView() {
+  if (localPlayerIndex < 0 || !players[localPlayerIndex] || !players[localPlayerIndex].alive) {
+    camera.position.set(0, 50, 50);
+    camera.lookAt(0, 0, 0);
+    return;
+  }
+
+  const player = players[localPlayerIndex];
+  const pos = player.mesh.position;
+  const rot = player.mesh.rotation.y;
+
+  if (scoping) {
+    camera.fov = SCOPE_FOV;
+    camera.updateProjectionMatrix();
+    camera.position.set(pos.x, 1.5, pos.z);
+    const lookTarget = new THREE.Vector3(0, 0, 10);
+    lookTarget.applyQuaternion(player.mesh.quaternion);
+    lookTarget.add(pos);
+    camera.lookAt(lookTarget);
+    scopeCanvas.classList.add('active');
+  } else {
+    camera.fov = NORMAL_FOV;
+    camera.updateProjectionMatrix();
+    const offset = new THREE.Vector3(0, 5, 12);
+    offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), rot);
+    camera.position.set(pos.x + offset.x, offset.y, pos.z + offset.z);
+    camera.lookAt(pos.x, 1, pos.z);
+    scopeCanvas.classList.remove('active');
+  }
+
+  // Satellite view
+  for (const p of players) {
+    if (p.usingSatellite) {
+      satelliteCanvas.classList.add('active');
+      drawSatelliteOverlay(p.satelliteTarget);
+      break;
+    }
+  }
+  if (!players.some(p => p.usingSatellite)) {
+    satelliteCanvas.classList.remove('active');
+  }
+}
+
+function drawSatelliteOverlay(target) {
+  const w = satelliteCanvas.width = window.innerWidth;
+  const h = satelliteCanvas.height = window.innerHeight;
+  satelliteCtx.clearRect(0, 0, w, h);
+
+  // Black mask
+  satelliteCtx.fillStyle = 'rgba(0,0,0,0.7)';
+  satelliteCtx.fillRect(0, 0, w, h);
+
+  // Clear circle
+  satelliteCtx.save();
+  satelliteCtx.beginPath();
+  satelliteCtx.arc(w/2, h/2, 150, 0, Math.PI * 2);
+  satelliteCtx.clip();
+  satelliteCtx.clearRect(0, 0, w, h);
+  satelliteCtx.restore();
+
+  // Crosshair
+  satelliteCtx.strokeStyle = '#ff0000';
+  satelliteCtx.lineWidth = 2;
+  satelliteCtx.beginPath();
+  satelliteCtx.moveTo(w/2 - 20, h/2);
+  satelliteCtx.lineTo(w/2 + 20, h/2);
+  satelliteCtx.moveTo(w/2, h/2 - 20);
+  satelliteCtx.lineTo(w/2, h/2 + 20);
+  satelliteCtx.stroke();
+
+  // Radius circle
+  satelliteCtx.beginPath();
+  satelliteCtx.arc(w/2, h/2, 150, 0, Math.PI * 2);
+  satelliteCtx.stroke();
+}
+
+function drawMinimap() {
+  const w = minimapCanvas.width = 180;
+  const h = minimapCanvas.height = 180;
+  const ctx = minimapCtx;
+  const scale = MINIMAP_RADIUS / MAP_HALF;
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = 'rgba(0,50,0,0.5)';
+  ctx.beginPath();
+  ctx.arc(w/2, h/2, MINIMAP_RADIUS, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Poison circle
+  if (poisonCircle && poisonCircle.visible) {
+    ctx.strokeStyle = '#8800ff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    const r = (poisonCircle.scale.x || 1) * MINIMAP_RADIUS;
+    ctx.arc(w/2, h/2, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Rocks
+  ctx.fillStyle = '#666';
+  for (const rock of rocks) {
+    ctx.beginPath();
+    ctx.arc(w/2 + rock.x * scale, h/2 + rock.z * scale, rock.radius * scale * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Health packs
+  ctx.fillStyle = '#00ff00';
+  for (const pack of healthPacks) {
+    if (pack.mesh.visible) {
+      ctx.beginPath();
+      ctx.arc(w/2 + pack.x * scale, h/2 + pack.z * scale, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Satellite pickup
+  if (satellitePickup && satellitePickup.mesh.visible) {
+    ctx.fillStyle = '#ffff00';
+    ctx.beginPath();
+    ctx.arc(w/2 + satellitePickup.x * scale, h/2 + satellitePickup.z * scale, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Mines (own only)
+  for (const mine of mines) {
+    if (mine.owner === localPlayerIndex && mine.armed) {
+      ctx.fillStyle = '#ff0000';
+      ctx.beginPath();
+      ctx.arc(w/2 + mine.x * scale, h/2 + mine.z * scale, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Players
+  if (localPlayerIndex >= 0 && players[localPlayerIndex] && players[localPlayerIndex].mesh) {
+    const localPos = players[localPlayerIndex].mesh.position;
+    
+    for (const player of players) {
+      if (!player.alive || !player.mesh) continue;
+      const px = player.mesh.position.x;
+      const pz = player.mesh.position.z;
+      
+      const isLocal = player.index === localPlayerIndex;
+      const inGrass = player.inGrass && !isLocal;
+      
+      if (isLocal) {
+        // Arrow for self
+        const rot = player.mesh.rotation.y;
+        ctx.save();
+        ctx.translate(w/2 + px * scale, h/2 + pz * scale);
+        ctx.rotate(-rot);
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(0, -8);
+        ctx.lineTo(-5, 5);
+        ctx.lineTo(5, 5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      } else if (!inGrass) {
+        // Dot for enemies
+        ctx.fillStyle = '#' + player.color.toString(16).padStart(6, '0');
+        ctx.beginPath();
+        ctx.arc(w/2 + px * scale, h/2 + pz * scale, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+}
+
+function updateHUD() {
+  const player = players[localPlayerIndex];
+  if (!player) return;
+
+  const info = document.getElementById('p-info-local');
+  info.querySelector('.player-dot').style.backgroundColor = '#' + player.color.toString(16).padStart(6, '0');
+  info.querySelector('.player-name').textContent = player.name;
+  info.querySelector('.hp-fill').style.width = player.hp + '%';
+  info.querySelector('.weapon span').textContent = WEAPONS[player.weapon].name;
+}
+
+// ============== NETWORKING ==============
+function initPeer() {
+  const roomId = generateRoomId();
+  
+  const turnConfig = {
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        // Add your TURN server here:
+        // { urls: 'turn:your-turn-server.com:3478', username: 'user', credential: 'pass' }
+      ]
+    }
+  };
+
+  peer = new Peer(roomId, turnConfig);
+
+  peer.on('open', (id) => {
+    console.log('My peer ID:', id);
+    document.getElementById('my-room-id').textContent = id;
+  });
+
+  peer.on('connection', (conn) => {
+    console.log('Incoming connection from:', conn.peer);
+    handleConnection(conn);
+  });
+
+  peer.on('error', (err) => {
+    console.error('Peer error:', err);
+    showStatus('连接错误: ' + err.type, 'error');
+  });
+}
+
+function handleConnection(conn) {
+  conn.on('open', () => {
+    console.log('Connection opened with:', conn.peer);
+    
+    if (isHost) {
+      // Add player to lobby
+      conn.send({ t: 'lobby', players: lobbyState.players });
+      connections.push(conn);
+    } else {
+      hostConnection = conn;
+    }
+  });
+
+  conn.on('data', (data) => {
+    handleMessage(data, conn);
+  });
+
+  conn.on('close', () => {
+    console.log('Connection closed:', conn.peer);
+    if (isHost) {
+      const idx = connections.indexOf(conn);
+      if (idx >= 0) connections.splice(idx, 1);
+    }
+  });
+}
+
+function handleMessage(data, conn) {
+  switch (data.t) {
+    case 'join':
+      if (isHost) {
+        const playerIndex = lobbyState.players.length;
+        if (playerIndex >= 4) {
+          conn.send({ t: 'full' });
+          conn.close();
+          return;
+        }
+        const player = { index: playerIndex, name: data.name, ready: false };
+        lobbyState.players.push(player);
+        conn.send({ t: 'joined', index: playerIndex, players: lobbyState.players });
+        broadcastLobby();
+      }
+      break;
+
+    case 'start':
+      if (isHost) {
+        startGame();
+      }
+      break;
+
+    case 'input':
+      if (isHost) {
+        const playerIndex = data.p;
+        if (players[playerIndex]) {
+          players[playerIndex].input = data.input;
+        }
+      }
+      break;
+
+    case 'lobby':
+      // Client received lobby state
+      lobbyState.players = data.players;
+      updateLobbyUI();
+      break;
+
+    case 'joined':
+      // Client joined successfully
+      localPlayerIndex = data.index;
+      lobbyState.players = data.players;
+      updateLobbyUI();
+      break;
+
+    case 'state':
+      // Client received game state
+      if (!isHost) {
+        applyRemoteState(data);
+      }
+      break;
+
+    case 'win':
+      showWinner(data.w);
+      break;
+  }
+}
+
+function broadcast(msg) {
+  for (const conn of connections) {
+    if (conn.open) {
+      conn.send(msg);
+    }
+  }
+}
+
+function broadcastLobby() {
+  broadcast({ t: 'lobby', players: lobbyState.players });
+}
+
+function sendToHost(msg) {
+  if (hostConnection && hostConnection.open) {
+    hostConnection.send(msg);
+  }
+}
+
+function applyRemoteState(state) {
+  for (let i = 0; i < state.p.length; i++) {
+    const ps = state.p[i];
+    const player = players[i];
+    if (!player || !player.mesh) continue;
+
+    // Interpolate position
+    player.mesh.position.x += (ps.x - player.mesh.position.x) * 0.3;
+    player.mesh.position.z += (ps.z - player.mesh.position.z) * 0.3;
+    player.mesh.rotation.y = ps.r;
+    player.hp = ps.hp;
+    player.weapon = ps.w;
+    player.alive = ps.alive;
+    player.usingSatellite = ps.us;
+    player.scoping = ps.sc;
+
+    if (player.satelliteBeam && !ps.us) {
+      scene.remove(player.satelliteBeam);
+      player.satelliteBeam = null;
+    }
+  }
+
+  // Update bullets
+  // (simplified - in production you'd sync bullet IDs properly)
+}
+
+// ============== GAME LOOP ==============
+let gameStartTime = 0;
+let lastStateBroadcast = 0;
+const STATE_BROADCAST_INTERVAL = 50; // 20Hz
+
+function gameLoop() {
+  if (!gameStarted) return;
+
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  if (isHost) {
+    // Process inputs
+    for (const player of players) {
+      if (!player.alive || player.index === localPlayerIndex) continue;
+      const input = player.input || {};
+      const controls = {
+        forward: input.f || false,
+        backward: input.b || false,
+        left: input.l || false,
+        right: input.r || false
+      };
+      movePlayer(player, controls, dt);
+
+      if (input.fire) {
+        fire(player);
+      }
+      if (input.mine) {
+        createMine(player);
+      }
+      if (input.sat && player.hasSatellite) {
+        fireSatelliteLaser(player);
+      }
+      if (input.sc !== player.scoping) {
+        player.scoping = input.sc;
+        scoping = player.index === localPlayerIndex ? input.sc : false;
+      }
+    }
+
+    // Process local player (with keyboard)
+    const localPlayer = players[localPlayerIndex];
+    if (localPlayer && localPlayer.alive) {
+      const controls = {
+        forward: keys['KeyW'] || keys['ArrowUp'],
+        backward: keys['KeyS'] || keys['ArrowDown'],
+        left: keys['KeyA'] || keys['ArrowLeft'],
+        right: keys['KeyD'] || keys['ArrowRight']
+      };
+      movePlayer(localPlayer, controls, dt);
+
+      if (keys['Space'] && !prevKeys['Space']) {
+        fire(localPlayer);
+      }
+      if (keys['KeyE'] && !prevKeys['KeyE']) {
+        createMine(localPlayer);
+      }
+      if (keys['KeyC'] && !prevKeys['KeyC'] && localPlayer.hasSatellite) {
+        fireSatelliteLaser(localPlayer);
+      }
+      if (keys['KeyZ'] && !prevKeys['KeyZ']) {
+        localPlayer.scoping = !localPlayer.scoping;
+        scoping = localPlayer.scoping;
+      }
+      if (keys['KeyQ'] && !prevKeys['KeyQ']) {
+        toggleWeapon(localPlayer);
+      }
+
+      // Boost detection
+      const now = performance.now();
+      const tapKey = keys['KeyW'] ? 'KeyW' : (keys['ArrowUp'] ? 'ArrowUp' : null);
+      if (tapKey && !prevKeys[tapKey]) {
+        if (now - localPlayer.lastTapTime < DOUBLE_TAP_MS && localPlayer.lastTapKey === tapKey) {
+          localPlayer.boosting = true;
+          localPlayer.boostEndTime = now + BOOST_DURATION;
+        }
+        localPlayer.lastTapKey = tapKey;
+        localPlayer.lastTapTime = now;
+      }
+      if (now > localPlayer.boostEndTime) {
+        localPlayer.boosting = false;
+      }
+    }
+
+    // Resolve collisions
+    resolveTankCollisions();
+
+    // Updates
+    updateGrassStealth();
+    updateHealthPacks(dt);
+    updateMines(dt);
+    updateSatellitePickup(dt);
+    updateSatellitePlayers(dt);
+    if (enablePoisonCircle) updatePoison(dt);
+    updateBullets(dt);
+    updateHitFlash(dt);
+
+    // Broadcast state
+    const now = performance.now();
+    if (now - lastStateBroadcast > STATE_BROADCAST_INTERVAL) {
+      const state = {
+        t: 'state',
+        p: players.map(p => ({
+          x: p.mesh ? p.mesh.position.x : 0,
+          z: p.mesh ? p.mesh.position.z : 0,
+          r: p.rotation || 0,
+          hp: p.hp,
+          w: p.weapon,
+          alive: p.alive,
+          us: p.usingSatellite,
+          sc: p.scoping
+        }))
+      };
+      broadcast(state);
+      lastStateBroadcast = now;
+    }
+  }
+
+  // Render
+  renderView();
+  drawMinimap();
+  updateHUD();
+
+  // Copy keys
+  for (const key in keys) {
+    prevKeys[key] = keys[key];
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ============== LOBBY ==============
+function showLobbySection(id) {
+  // Hide all modals first
+  document.getElementById('modal-create').classList.remove('show');
+  document.getElementById('modal-join').classList.remove('show');
+  
+  if (id === 'lobby-create') {
+    document.getElementById('modal-create').classList.add('show');
+  } else if (id === 'lobby-join') {
+    document.getElementById('modal-join').classList.add('show');
+  }
+}
+
+// Generate 6-character room ID
+function generateRoomId() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let id = '';
+  for (let i = 0; i < 6; i++) {
+    id += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return id;
+}
+
+function updateLobbyUI() {
+  const container = document.getElementById('players-container');
+  container.innerHTML = '';
+  
+  for (const p of lobbyState.players) {
+    const div = document.createElement('div');
+    div.className = 'player-item';
+    div.innerHTML = `
+      <span class="player-dot" style="background:#${PLAYER_COLORS[p.index].toString(16).padStart(6,'0')}"></span>
+      <span class="player-name">${p.name || PLAYER_NAMES[p.index]}</span>
+      <span class="player-status">${p.index === localPlayerIndex ? '(你)' : ''}</span>
+    `;
+    container.appendChild(div);
+  }
+
+  const startBtn = document.getElementById('btn-start');
+  if (isHost && lobbyState.players.length >= 1) {
+    startBtn.disabled = false;
+    startBtn.textContent = '开始游戏';
+  } else if (isHost) {
+    startBtn.disabled = true;
+    startBtn.textContent = '等待玩家加入...';
+  }
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById('status-msg');
+  el.textContent = msg;
+  el.className = type;
+  el.style.display = 'block';
+}
+
+// ============== START GAME ==============
+function startGame() {
+  gameStarted = true;
+  gameStartTime = performance.now();
+
+  // Initialize all players
+  players = [];
+  for (let i = 0; i < 4; i++) {
+    const p = createPlayerState(i);
+    p.alive = false;
+    p.hasSatellite = false;
+    
+    // Host is always player 0
+    if (i === 0) {
+      p.alive = true;
+      p.name = '你';
+      localPlayerIndex = 0;
+    }
+    
+    // Create mesh
+    const tank = createTankMesh(p.color);
+    scene.add(tank.group);
+    p.mesh = tank.group;
+    p.muzzle = tank.muzzle;
+    
+    // Spawn position
+    const spawn = SPAWN_POSITIONS[i];
+    p.mesh.position.set(spawn[0], spawn[1], spawn[2]);
+    if (i === 0) {
+      p.mesh.rotation.y = Math.PI;
+    }
+    
+    players.push(p);
+  }
+
+  // Setup game options
+  enableCollisionDamage = document.getElementById('opt-collision').checked;
+  enablePoisonCircle = document.getElementById('opt-poison').checked;
+  enableBulletSpread = document.getElementById('opt-spread').checked;
+  enableMines = document.getElementById('opt-mines').checked;
+  enableSatellite = document.getElementById('opt-satellite').checked;
+
+  // Spawn environment
+  spawnRocks();
+  spawnHealthPacks();
+  spawnGrassPatches();
+  if (enablePoisonCircle) createPoisonCircle();
+  if (enableSatellite) spawnSatellitePickup();
+
+  // Hide lobby, show game
+  document.getElementById('lobby').classList.add('hidden');
+  document.getElementById('ui').classList.add('active');
+  document.getElementById('winner-overlay').classList.remove('show');
+
+  // Start loop
+  clock.start();
+  gameLoop();
+}
+
+// ============== EVENT LISTENERS ==============
+document.getElementById('btn-create').addEventListener('click', () => {
+  isHost = true;
+  lobbyState.players = [{ index: 0, name: '房主', ready: true }];
+  localPlayerIndex = 0;
+  initPeer();
+  showLobbySection('lobby-create');
+  updateLobbyUI();
+});
+
+document.getElementById('btn-join').addEventListener('click', () => {
+  showLobbySection('lobby-join');
+});
+
+document.getElementById('btn-connect').addEventListener('click', () => {
+  const roomId = document.getElementById('join-room-id').value.trim();
+  const name = document.getElementById('player-name').value.trim() || '玩家';
+  
+  if (!roomId) {
+    showStatus('请输入房间ID', 'error');
+    return;
+  }
+
+  showStatus('连接中...', 'info');
+  peer = new Peer();
+  
+  peer.on('open', () => {
+    const conn = peer.connect(roomId);
+    conn.on('open', () => {
+      isHost = false;
+      hostConnection = conn;
+      conn.send({ t: 'join', name: name });
+      showStatus('连接成功!', 'success');
+    });
+    
+    conn.on('data', (data) => handleMessage(data, conn));
+    
+    conn.on('error', (err) => {
+      showStatus('连接失败: ' + err.type, 'error');
+    });
+  });
+
+  peer.on('error', (err) => {
+    showStatus('连接错误: ' + err.type, 'error');
+  });
+});
+
+document.getElementById('btn-back').addEventListener('click', () => {
+  if (peer) peer.destroy();
+  showLobbySection('lobby-main');
+});
+
+document.getElementById('btn-cancel-join').addEventListener('click', () => {
+  showLobbySection('lobby-main');
+});
+
+document.getElementById('btn-start').addEventListener('click', () => {
+  if (isHost && lobbyState.players.length >= 1) {
+    startGame();
+    broadcast({ t: 'start' });
+  }
+});
+
+document.getElementById('btn-restart').addEventListener('click', () => {
+  document.getElementById('winner-overlay').classList.remove('show');
+  if (isHost) {
+    // Reset game
+    bullets.forEach(b => { if (b.mesh) scene.remove(b.mesh); });
+    bullets = [];
+    mines.forEach(m => { if (m.mesh) scene.remove(m.mesh); });
+    mines = [];
+    startGame();
+    broadcast({ t: 'start' });
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  keys[e.code] = true;
+  if (['Space', 'KeyZ', 'KeyQ', 'KeyE', 'KeyC'].includes(e.code)) {
+    e.preventDefault();
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  keys[e.code] = false;
+});
+
+// ============== INIT ==============
+initThree();
+</script>
+</body>
+</html>

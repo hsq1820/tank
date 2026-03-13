@@ -1,4 +1,8 @@
 {
   "buildCommand": null,
-  "outputDirectory": "public"
+  "outputDirectory": "public",
+  "rewrites": [
+    { "source": "/local", "destination": "/local.html" },
+    { "source": "/online", "destination": "/online.html" }
+  ]
 }
