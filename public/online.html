@@ -276,6 +276,96 @@ body {
   border-radius: 4px;
   margin: 0 2px;
 }
+
+#mobile-controls {
+  position: fixed;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  z-index: 180;
+}
+
+#ui.active ~ #mobile-controls.mobile-enabled {
+  display: block;
+}
+
+.mobile-joystick {
+  position: fixed;
+  left: 18px;
+  bottom: 20px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.joystick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 52px;
+  height: 52px;
+  margin-left: -26px;
+  margin-top: -26px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #8ee6ff, #0d85b5);
+  border: 2px solid rgba(255,255,255,0.55);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+}
+
+.mobile-actions {
+  position: fixed;
+  right: 18px;
+  bottom: 20px;
+  width: 170px;
+  height: 200px;
+  pointer-events: none;
+}
+
+.mobile-btn {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.28);
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+.mobile-btn:active,
+.mobile-btn.active {
+  transform: scale(0.95);
+  background: rgba(0,198,255,0.4);
+  border-color: rgba(0,198,255,0.9);
+}
+
+#mb-fire { right: 0; bottom: 0; width: 78px; height: 78px; font-size: 26px; }
+#mb-weapon { right: 94px; bottom: 10px; }
+#mb-mine { right: 0; bottom: 98px; }
+#mb-scope { right: 94px; bottom: 108px; }
+
+@media (max-width: 900px), (pointer: coarse) {
+  .controls-hint { display: none; }
+  .minimap-container {
+    top: 16px;
+    right: 16px;
+    bottom: auto;
+    width: 136px;
+    height: 136px;
+  }
+}
 </style>
 </head>
 <body>
@@ -349,6 +439,18 @@ body {
     <kbd>E</kbd> 放置地雷 
     <kbd>Z</kbd> 瞄准镜 
     <kbd>C</kbd> 卫星激光
+  </div>
+</div>
+
+<div id="mobile-controls">
+  <div class="mobile-joystick" id="mobile-joystick">
+    <div class="joystick-knob" id="mobile-joystick-knob"></div>
+  </div>
+  <div class="mobile-actions">
+    <button class="mobile-btn" id="mb-fire" type="button" aria-label="开火">●</button>
+    <button class="mobile-btn" id="mb-weapon" type="button" aria-label="切换武器">Q</button>
+    <button class="mobile-btn" id="mb-mine" type="button" aria-label="放置地雷">E</button>
+    <button class="mobile-btn" id="mb-scope" type="button" aria-label="瞄准镜">Z</button>
   </div>
 </div>
 
@@ -446,6 +548,9 @@ let enableSatellite = true;
 let scopeCanvas, scopeCtx;
 let satelliteCanvas, satelliteCtx;
 let minimapCanvas, minimapCtx;
+let isMobileTouch = false;
+let mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false };
+let prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false };
 
 // ============== THREE.JS SETUP ==============
 function initThree() {
@@ -504,6 +609,7 @@ function initThree() {
   clock = new THREE.Clock();
 
   window.addEventListener('resize', onResize);
+  setupMobileControls();
 }
 
 function onResize() {
@@ -512,6 +618,104 @@ function onResize() {
   camera.aspect = w/h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
+}
+
+function detectMobileDevice() {
+  const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  const mobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  return coarse || mobileUA;
+}
+
+function setupMobileControls() {
+  isMobileTouch = detectMobileDevice();
+  const root = document.getElementById('mobile-controls');
+  if (!root || !isMobileTouch) return;
+  root.classList.add('mobile-enabled');
+
+  const stick = document.getElementById('mobile-joystick');
+  const knob = document.getElementById('mobile-joystick-knob');
+  let activePointerId = null;
+  let maxR = 0;
+
+  const resetStick = () => {
+    mobileInput.forward = false;
+    mobileInput.backward = false;
+    mobileInput.left = false;
+    mobileInput.right = false;
+    knob.style.transform = 'translate(0px, 0px)';
+  };
+
+  const updateStick = (clientX, clientY) => {
+    const rect = stick.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    maxR = rect.width * 0.36;
+    let dx = clientX - cx;
+    let dy = clientY - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > maxR && dist > 0.001) {
+      dx = dx / dist * maxR;
+      dy = dy / dist * maxR;
+    }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+
+    const nx = dx / maxR;
+    const ny = dy / maxR;
+    const dead = 0.22;
+    mobileInput.forward = ny < -dead;
+    mobileInput.backward = ny > dead;
+    mobileInput.left = nx < -dead;
+    mobileInput.right = nx > dead;
+  };
+
+  stick.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    activePointerId = e.pointerId;
+    stick.setPointerCapture(e.pointerId);
+    updateStick(e.clientX, e.clientY);
+  });
+
+  stick.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== activePointerId) return;
+    e.preventDefault();
+    updateStick(e.clientX, e.clientY);
+  });
+
+  const endStick = (e) => {
+    if (e.pointerId !== activePointerId) return;
+    e.preventDefault();
+    activePointerId = null;
+    resetStick();
+  };
+
+  stick.addEventListener('pointerup', endStick);
+  stick.addEventListener('pointercancel', endStick);
+
+  const triggerTapAction = (field, btn) => {
+    mobileInput[field] = true;
+    btn.classList.add('active');
+    setTimeout(() => {
+      mobileInput[field] = false;
+      btn.classList.remove('active');
+    }, 90);
+  };
+
+  const fireBtn = document.getElementById('mb-fire');
+  const setFire = (on) => {
+    mobileInput.fire = on;
+    fireBtn.classList.toggle('active', on);
+  };
+  fireBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); setFire(true); });
+  fireBtn.addEventListener('pointerup', (e) => { e.preventDefault(); setFire(false); });
+  fireBtn.addEventListener('pointercancel', (e) => { e.preventDefault(); setFire(false); });
+  fireBtn.addEventListener('pointerleave', () => { setFire(false); });
+
+  const weaponBtn = document.getElementById('mb-weapon');
+  const mineBtn = document.getElementById('mb-mine');
+  const scopeBtn = document.getElementById('mb-scope');
+  weaponBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); triggerTapAction('weaponToggle', weaponBtn); });
+  mineBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); triggerTapAction('mine', mineBtn); });
+  scopeBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); triggerTapAction('scopeToggle', scopeBtn); });
 }
 
 // ============== PLAYER CREATION ==============
@@ -537,8 +741,8 @@ function createPlayerState(index) {
     inGrass: false,
     scoping: false,
     usingSatellite: false,
-    satelliteTarget: { x: 0, z: 0 },
     satelliteFiring: false,
+    satelliteTarget: { x: 0, z: 0 },
     satelliteFireTime: 0,
     satelliteBeam: null,
     satelliteDamageApplied: false,
@@ -573,12 +777,12 @@ function createTankMesh(color) {
   const gunMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
   const gun = new THREE.Mesh(gunGeo, gunMat);
   gun.rotation.x = Math.PI/2;
-  gun.position.set(0, 1.0, 1.1);
+  gun.position.set(0, 1.0, -1.1);
   group.add(gun);
 
   // Muzzle
   const muzzle = new THREE.Object3D();
-  muzzle.position.set(0, 1.0, 2.2);
+  muzzle.position.set(0, 1.0, -2.2);
   group.add(muzzle);
 
   // Hatch
@@ -730,23 +934,31 @@ function findSafeSpawnPosition(minFromCenter, minRockDist, minGrassDist, minPack
 function createSatellitePickup(x, z) {
   const group = new THREE.Group();
 
-  const octaGeo = new THREE.OctahedronGeometry(0.8);
-  const octaMat = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xffaa00, emissiveIntensity: 0.5 });
+  const octaGeo = new THREE.OctahedronGeometry(1.4);
+  const octaMat = new THREE.MeshStandardMaterial({
+    color: 0xffe066,
+    emissive: 0xffaa00,
+    emissiveIntensity: 0.9,
+    metalness: 0.45,
+    roughness: 0.3
+  });
   const octa = new THREE.Mesh(octaGeo, octaMat);
-  octa.position.y = 1.5;
+  octa.castShadow = true;
+  octa.position.y = 2.6;
   group.add(octa);
 
-  const torusGeo = new THREE.TorusGeometry(1.2, 0.1, 8, 16);
-  const torusMat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.3 });
+  const torusGeo = new THREE.TorusGeometry(1.9, 0.12, 10, 36);
+  const torusMat = new THREE.MeshStandardMaterial({ color: 0xffd86b, emissive: 0xffcc33, emissiveIntensity: 0.55 });
   const torus = new THREE.Mesh(torusGeo, torusMat);
+  torus.castShadow = true;
   torus.rotation.x = Math.PI/2;
-  torus.position.y = 1.5;
+  torus.position.y = 2.6;
   group.add(torus);
 
-  const glowGeo = new THREE.SphereGeometry(2, 16, 16);
-  const glowMat = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.1 });
+  const glowGeo = new THREE.SphereGeometry(2.4, 18, 18);
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.22 });
   const glow = new THREE.Mesh(glowGeo, glowMat);
-  glow.position.y = 1.5;
+  glow.position.y = 2.6;
   group.add(glow);
 
   group.position.set(x, 0, z);
@@ -814,9 +1026,9 @@ function fire(player) {
   player.lastShot = now;
 
   const spread = player.weapon === 'mg' ? MG_SPREAD_ANGLE : CANNON_SPREAD;
-  const spreadAngle = enableBulletSpread ? (Math.random() - 0.5) * spread : 0;
+  const spreadAngle = (enableBulletSpread && !player.scoping) ? (Math.random() - 0.5) * spread : 0;
   
-  const dir = new THREE.Vector3(0, 0, 1);
+  const dir = new THREE.Vector3(0, 0, -1);
   dir.applyQuaternion(player.mesh.quaternion);
   dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), spreadAngle);
 
@@ -877,8 +1089,8 @@ function createMine(player) {
 }
 
 function fireSatelliteLaser(player) {
-  if (player.usingSatellite || !enableSatellite) return;
-  player.usingSatellite = true;
+  if (!player.usingSatellite || player.satelliteFiring) return;
+  player.satelliteFiring = true;
   player.satelliteFireTime = performance.now();
   player.satelliteDamageApplied = false;
 
@@ -892,27 +1104,27 @@ function fireSatelliteLaser(player) {
 function createSatelliteBeamMesh() {
   const group = new THREE.Group();
   
-  const beamGeo = new THREE.CylinderGeometry(0.3, 2, 200, 8);
+  const beamGeo = new THREE.CylinderGeometry(1.8, 1.8, 150, 20);
   const beamMat = new THREE.MeshBasicMaterial({ 
-    color: 0xff0000, 
+    color: 0xfff1a8, 
     transparent: true, 
-    opacity: 0.3 
+    opacity: 0.55 
   });
   const beam = new THREE.Mesh(beamGeo, beamMat);
-  beam.position.y = 100;
+  beam.position.y = 75;
   group.add(beam);
 
-  const coreGeo = new THREE.CylinderGeometry(0.1, 0.8, 200, 8);
-  const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const coreGeo = new THREE.CylinderGeometry(0.55, 0.55, 150, 16);
+  const coreMat = new THREE.MeshBasicMaterial({ color: 0xff53ff, transparent: true, opacity: 0.9 });
   const core = new THREE.Mesh(coreGeo, coreMat);
-  core.position.y = 100;
+  core.position.y = 75;
   group.add(core);
 
-  const impactGeo = new THREE.RingGeometry(SATELLITE_RADIUS - 2, SATELLITE_RADIUS, 32);
+  const impactGeo = new THREE.RingGeometry(SATELLITE_RADIUS * 0.65, SATELLITE_RADIUS, 48);
   const impactMat = new THREE.MeshBasicMaterial({ 
-    color: 0xff0000, 
+    color: 0xfff3b0, 
     transparent: true, 
-    opacity: 0.5,
+    opacity: 0.9,
     side: THREE.DoubleSide 
   });
   const impact = new THREE.Mesh(impactGeo, impactMat);
@@ -1129,8 +1341,8 @@ function updateSatellitePickup(dt) {
   if (!satellitePickup) return;
   
   const now = performance.now();
-  satellitePickup.mesh.rotation.y += dt;
-  satellitePickup.mesh.children[1].rotation.z += dt * 2;
+  satellitePickup.mesh.rotation.y += dt * 1.5;
+  satellitePickup.mesh.position.y = 2.6 + Math.sin(now * 0.0035) * 0.45;
 
   for (const player of players) {
     if (!player.alive || !player.mesh || player.usingSatellite) continue;
@@ -1152,26 +1364,44 @@ function updateSatellitePickup(dt) {
 
 function updateSatellitePlayers(dt) {
   for (const player of players) {
-    if (!player.usingSatellite || !player.satelliteBeam) continue;
+    if (!player.usingSatellite) continue;
+
+    // Target selection phase (before firing)
+    if (!player.satelliteFiring) {
+      const targetSpeed = SATELLITE_TARGET_SPEED * dt;
+      let up = false, down = false, left = false, right = false;
+      if (player.index === localPlayerIndex) {
+        up = !!(keys['KeyW'] || keys['ArrowUp']);
+        down = !!(keys['KeyS'] || keys['ArrowDown']);
+        left = !!(keys['KeyA'] || keys['ArrowLeft']);
+        right = !!(keys['KeyD'] || keys['ArrowRight']);
+      } else {
+        const input = player.input || {};
+        up = !!input.f;
+        down = !!input.b;
+        left = !!input.l;
+        right = !!input.r;
+      }
+      if (up) player.satelliteTarget.z -= targetSpeed;
+      if (down) player.satelliteTarget.z += targetSpeed;
+      if (left) player.satelliteTarget.x -= targetSpeed;
+      if (right) player.satelliteTarget.x += targetSpeed;
+
+      player.satelliteTarget.x = Math.max(-MAP_HALF + 10, Math.min(MAP_HALF - 10, player.satelliteTarget.x));
+      player.satelliteTarget.z = Math.max(-MAP_HALF + 10, Math.min(MAP_HALF - 10, player.satelliteTarget.z));
+      continue;
+    }
+
+    if (!player.satelliteBeam) continue;
 
     const now = performance.now();
     if (now - player.satelliteFireTime > SATELLITE_EFFECT_MS) {
       scene.remove(player.satelliteBeam);
       player.satelliteBeam = null;
       player.usingSatellite = false;
+      player.satelliteFiring = false;
       continue;
     }
-
-    // Move target with WASD
-    const targetSpeed = SATELLITE_TARGET_SPEED * dt;
-    if (keys['KeyW'] || keys['ArrowUp']) player.satelliteTarget.z -= targetSpeed;
-    if (keys['KeyS'] || keys['ArrowDown']) player.satelliteTarget.z += targetSpeed;
-    if (keys['KeyA'] || keys['ArrowLeft']) player.satelliteTarget.x -= targetSpeed;
-    if (keys['KeyD'] || keys['ArrowRight']) player.satelliteTarget.x += targetSpeed;
-
-    // Clamp target
-    player.satelliteTarget.x = Math.max(-MAP_HALF + 10, Math.min(MAP_HALF - 10, player.satelliteTarget.x));
-    player.satelliteTarget.z = Math.max(-MAP_HALF + 10, Math.min(MAP_HALF - 10, player.satelliteTarget.z));
 
     // Update beam position
     player.satelliteBeam.position.set(player.satelliteTarget.x, 0, player.satelliteTarget.z);
@@ -1265,7 +1495,7 @@ function updateHitFlash(dt) {
 
 // ============== MOVEMENT ==============
 function movePlayer(player, controls, dt) {
-  if (!player.alive || !player.mesh) return;
+  if (!player.alive || !player.mesh || player.usingSatellite) return;
 
   player.prevX = player.mesh.position.x;
   player.prevZ = player.mesh.position.z;
@@ -1312,7 +1542,18 @@ function renderView() {
   const pos = player.mesh.position;
   const rot = player.mesh.rotation.y;
 
-  if (scoping) {
+  if (player.usingSatellite) {
+    camera.fov = NORMAL_FOV;
+    camera.updateProjectionMatrix();
+    camera.position.set(0, 180, 0.01);
+    camera.lookAt(0, 0, 0);
+    scopeCanvas.classList.remove('active');
+    if (scopeCanvas) {
+      scopeCanvas.width = window.innerWidth;
+      scopeCanvas.height = window.innerHeight;
+      scopeCtx.clearRect(0, 0, scopeCanvas.width, scopeCanvas.height);
+    }
+  } else if (scoping) {
     camera.fov = SCOPE_FOV;
     camera.updateProjectionMatrix();
     const eyePos = player.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
@@ -1327,54 +1568,227 @@ function renderView() {
     camera.position.set(pos.x + offset.x, offset.y, pos.z + offset.z);
     camera.lookAt(pos.x, 1, pos.z);
     scopeCanvas.classList.remove('active');
-  }
-
-  // Satellite view
-  for (const p of players) {
-    if (p.usingSatellite) {
-      satelliteCanvas.classList.add('active');
-      drawSatelliteOverlay(p.satelliteTarget);
-      break;
+    if (scopeCanvas) {
+      scopeCanvas.width = window.innerWidth;
+      scopeCanvas.height = window.innerHeight;
+      scopeCtx.clearRect(0, 0, scopeCanvas.width, scopeCanvas.height);
     }
   }
-  if (!players.some(p => p.usingSatellite)) {
+
+  // Satellite selection overlay (only for local player)
+  if (player.usingSatellite) {
+    satelliteCanvas.classList.add('active');
+    drawSatelliteOverlay(player);
+  } else {
     satelliteCanvas.classList.remove('active');
   }
 
   renderer.render(scene, camera);
+
+  if (!player.usingSatellite && scoping) {
+    drawScopeOverlay();
+  }
 }
 
-function drawSatelliteOverlay(target) {
+function drawScopeOverlay() {
+  const w = scopeCanvas.width = window.innerWidth;
+  const h = scopeCanvas.height = window.innerHeight;
+  const cx = w / 2;
+  const cy = h / 2;
+  const radius = Math.min(w, h) * 0.42;
+
+  scopeCtx.clearRect(0, 0, w, h);
+
+  // Black mask
+  scopeCtx.fillStyle = '#000';
+  scopeCtx.fillRect(0, 0, w, h);
+
+  // Circular hole
+  scopeCtx.globalCompositeOperation = 'destination-out';
+  scopeCtx.beginPath();
+  scopeCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+  scopeCtx.fill();
+  scopeCtx.globalCompositeOperation = 'source-over';
+
+  // Circle frames
+  scopeCtx.strokeStyle = 'rgba(200,200,200,0.6)';
+  scopeCtx.lineWidth = 2;
+  scopeCtx.beginPath();
+  scopeCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+  scopeCtx.stroke();
+
+  scopeCtx.strokeStyle = 'rgba(200,200,200,0.3)';
+  scopeCtx.lineWidth = 1;
+  scopeCtx.beginPath();
+  scopeCtx.arc(cx, cy, radius + 4, 0, Math.PI * 2);
+  scopeCtx.stroke();
+
+  // Crosshair lines with center gap
+  const crossLen = radius * 0.85;
+  const gap = radius * 0.06;
+  scopeCtx.strokeStyle = 'rgba(255,255,255,0.7)';
+  scopeCtx.lineWidth = 1.5;
+  scopeCtx.beginPath();
+  scopeCtx.moveTo(cx, cy - gap);
+  scopeCtx.lineTo(cx, cy - crossLen);
+  scopeCtx.moveTo(cx, cy + gap);
+  scopeCtx.lineTo(cx, cy + crossLen);
+  scopeCtx.moveTo(cx - gap, cy);
+  scopeCtx.lineTo(cx - crossLen, cy);
+  scopeCtx.moveTo(cx + gap, cy);
+  scopeCtx.lineTo(cx + crossLen, cy);
+  scopeCtx.stroke();
+
+  // Tick marks
+  scopeCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+  scopeCtx.lineWidth = 1;
+  scopeCtx.beginPath();
+  for (let i = 1; i <= 3; i++) {
+    const d = crossLen * i / 4;
+    const tick = radius * 0.03;
+    scopeCtx.moveTo(cx - tick, cy - d);
+    scopeCtx.lineTo(cx + tick, cy - d);
+    scopeCtx.moveTo(cx - tick, cy + d);
+    scopeCtx.lineTo(cx + tick, cy + d);
+    scopeCtx.moveTo(cx - d, cy - tick);
+    scopeCtx.lineTo(cx - d, cy + tick);
+    scopeCtx.moveTo(cx + d, cy - tick);
+    scopeCtx.lineTo(cx + d, cy + tick);
+  }
+  scopeCtx.stroke();
+
+  // Center dot
+  scopeCtx.fillStyle = 'rgba(255,50,50,0.8)';
+  scopeCtx.beginPath();
+  scopeCtx.arc(cx, cy, 2, 0, Math.PI * 2);
+  scopeCtx.fill();
+}
+
+function drawSatelliteOverlay(player) {
   const w = satelliteCanvas.width = window.innerWidth;
   const h = satelliteCanvas.height = window.innerHeight;
   satelliteCtx.clearRect(0, 0, w, h);
 
-  // Black mask
-  satelliteCtx.fillStyle = 'rgba(0,0,0,0.7)';
+  const cx = w / 2;
+  const cy = h / 2;
+  const mapRadiusPx = Math.min(w, h) * 0.42;
+  const mapScale = mapRadiusPx / MAP_HALF;
+  // Keep blast radius scale identical to local mode.
+  const blastRadiusPx = (SATELLITE_RADIUS / (MAP_HALF * 2)) * Math.min(w, h);
+
+  const worldToScreen = (x, z) => ({ x: cx + x * mapScale, y: cy + z * mapScale });
+  const target = player.satelliteTarget;
+  const targetScreen = worldToScreen(target.x, target.z);
+
+  // Dark mask
+  satelliteCtx.fillStyle = 'rgba(0,0,0,0.72)';
   satelliteCtx.fillRect(0, 0, w, h);
 
-  // Clear circle
+  // Tactical map viewport
   satelliteCtx.save();
   satelliteCtx.beginPath();
-  satelliteCtx.arc(w/2, h/2, 150, 0, Math.PI * 2);
+  satelliteCtx.arc(cx, cy, mapRadiusPx, 0, Math.PI * 2);
   satelliteCtx.clip();
-  satelliteCtx.clearRect(0, 0, w, h);
+
+  satelliteCtx.fillStyle = 'rgba(28,70,34,0.75)';
+  satelliteCtx.fillRect(cx - mapRadiusPx, cy - mapRadiusPx, mapRadiusPx * 2, mapRadiusPx * 2);
+
+  if (poisonCircle && poisonCircle.visible) {
+    const poisonR = (poisonCircle.scale.x || 1) * mapRadiusPx;
+    satelliteCtx.strokeStyle = 'rgba(170,70,255,0.65)';
+    satelliteCtx.lineWidth = 3;
+    satelliteCtx.beginPath();
+    satelliteCtx.arc(cx, cy, poisonR, 0, Math.PI * 2);
+    satelliteCtx.stroke();
+  }
+
+  satelliteCtx.fillStyle = '#686868';
+  for (const rock of rocks) {
+    const p = worldToScreen(rock.x, rock.z);
+    satelliteCtx.beginPath();
+    satelliteCtx.arc(p.x, p.y, Math.max(1.8, rock.radius * mapScale * 0.45), 0, Math.PI * 2);
+    satelliteCtx.fill();
+  }
+
+  satelliteCtx.fillStyle = '#00ff88';
+  for (const pack of healthPacks) {
+    if (!pack.mesh.visible) continue;
+    const p = worldToScreen(pack.x, pack.z);
+    satelliteCtx.beginPath();
+    satelliteCtx.arc(p.x, p.y, 3.8, 0, Math.PI * 2);
+    satelliteCtx.fill();
+  }
+
+  if (satellitePickup && satellitePickup.mesh.visible) {
+    const p = worldToScreen(satellitePickup.x, satellitePickup.z);
+    satelliteCtx.fillStyle = '#ffe066';
+    satelliteCtx.beginPath();
+    satelliteCtx.arc(p.x, p.y, 4.5, 0, Math.PI * 2);
+    satelliteCtx.fill();
+  }
+
+  if (localPlayerIndex >= 0 && players[localPlayerIndex] && players[localPlayerIndex].mesh) {
+    for (const player of players) {
+      if (!player.alive || !player.mesh) continue;
+      const p = worldToScreen(player.mesh.position.x, player.mesh.position.z);
+      if (player.index === localPlayerIndex) {
+        satelliteCtx.save();
+        satelliteCtx.translate(p.x, p.y);
+        satelliteCtx.rotate(-player.mesh.rotation.y);
+        satelliteCtx.fillStyle = '#ffffff';
+        satelliteCtx.beginPath();
+        satelliteCtx.moveTo(0, -8);
+        satelliteCtx.lineTo(-5, 5);
+        satelliteCtx.lineTo(5, 5);
+        satelliteCtx.closePath();
+        satelliteCtx.fill();
+        satelliteCtx.restore();
+      } else {
+        satelliteCtx.fillStyle = '#' + player.color.toString(16).padStart(6, '0');
+        satelliteCtx.beginPath();
+        satelliteCtx.arc(p.x, p.y, 4.8, 0, Math.PI * 2);
+        satelliteCtx.fill();
+      }
+    }
+  }
+
   satelliteCtx.restore();
 
-  // Crosshair
-  satelliteCtx.strokeStyle = '#ff0000';
-  satelliteCtx.lineWidth = 2;
+  // Map border
+  satelliteCtx.strokeStyle = 'rgba(255,255,255,0.32)';
+  satelliteCtx.lineWidth = 1.5;
   satelliteCtx.beginPath();
-  satelliteCtx.moveTo(w/2 - 20, h/2);
-  satelliteCtx.lineTo(w/2 + 20, h/2);
-  satelliteCtx.moveTo(w/2, h/2 - 20);
-  satelliteCtx.lineTo(w/2, h/2 + 20);
+  satelliteCtx.arc(cx, cy, mapRadiusPx, 0, Math.PI * 2);
   satelliteCtx.stroke();
 
-  // Radius circle
+  // Target crosshair and blast radius
+  satelliteCtx.strokeStyle = 'rgba(255,245,188,0.9)';
+  satelliteCtx.lineWidth = 2;
   satelliteCtx.beginPath();
-  satelliteCtx.arc(w/2, h/2, 150, 0, Math.PI * 2);
+  satelliteCtx.moveTo(targetScreen.x - 20, targetScreen.y);
+  satelliteCtx.lineTo(targetScreen.x + 20, targetScreen.y);
+  satelliteCtx.moveTo(targetScreen.x, targetScreen.y - 20);
+  satelliteCtx.lineTo(targetScreen.x, targetScreen.y + 20);
   satelliteCtx.stroke();
+
+  satelliteCtx.strokeStyle = 'rgba(255,229,128,0.95)';
+  satelliteCtx.lineWidth = 2;
+  satelliteCtx.beginPath();
+  satelliteCtx.arc(targetScreen.x, targetScreen.y, blastRadiusPx, 0, Math.PI * 2);
+  satelliteCtx.stroke();
+
+  satelliteCtx.strokeStyle = 'rgba(255,255,255,0.75)';
+  satelliteCtx.lineWidth = 1.5;
+  satelliteCtx.beginPath();
+  satelliteCtx.moveTo(28, 28);
+  satelliteCtx.lineTo(targetScreen.x, targetScreen.y);
+  satelliteCtx.stroke();
+
+  satelliteCtx.fillStyle = 'rgba(255,255,255,0.92)';
+  satelliteCtx.font = 'bold 18px Segoe UI';
+  satelliteCtx.fillText(player.satelliteFiring ? '卫星激光发射中...' : '卫星瞄准：WASD移动，按 C 或 Space 发射', 24, 36);
+  satelliteCtx.font = '14px Segoe UI';
+  satelliteCtx.fillText('打击半径：' + SATELLITE_RADIUS.toFixed(0) + 'm（与本地版一致）', 24, 60);
 }
 
 function drawMinimap() {
@@ -1561,6 +1975,9 @@ function handleMessage(data, conn) {
 
     case 'start':
       if (!isHost) {
+        if (Array.isArray(data.players)) {
+          lobbyState.players = data.players;
+        }
         startGame(data.cfg || null);
       }
       break;
@@ -1632,9 +2049,21 @@ function applyRemoteState(state) {
     player.weapon = ps.w;
     player.alive = ps.alive;
     player.usingSatellite = ps.us;
+    player.satelliteFiring = !!ps.sf;
     player.scoping = ps.sc;
+    if (typeof ps.tx === 'number') player.satelliteTarget.x = ps.tx;
+    if (typeof ps.tz === 'number') player.satelliteTarget.z = ps.tz;
 
-    if (player.satelliteBeam && !ps.us) {
+    if (player.usingSatellite && player.satelliteFiring && !player.satelliteBeam) {
+      const beam = createSatelliteBeamMesh();
+      scene.add(beam);
+      player.satelliteBeam = beam;
+    }
+    if (player.satelliteBeam && player.usingSatellite && player.satelliteFiring) {
+      player.satelliteBeam.position.set(player.satelliteTarget.x, 0, player.satelliteTarget.z);
+    }
+
+    if (player.satelliteBeam && (!ps.us || !ps.sf)) {
       scene.remove(player.satelliteBeam);
       player.satelliteBeam = null;
     }
@@ -1650,15 +2079,15 @@ function applyRemoteState(state) {
 
 function buildClientInput() {
   return {
-    f: !!(keys['KeyW'] || keys['ArrowUp']),
-    b: !!(keys['KeyS'] || keys['ArrowDown']),
-    l: !!(keys['KeyA'] || keys['ArrowLeft']),
-    r: !!(keys['KeyD'] || keys['ArrowRight']),
-    fire: !!keys['Space'],
-    mine: !!(keys['KeyE'] && !prevKeys['KeyE']),
+    f: !!(keys['KeyW'] || keys['ArrowUp'] || mobileInput.forward),
+    b: !!(keys['KeyS'] || keys['ArrowDown'] || mobileInput.backward),
+    l: !!(keys['KeyA'] || keys['ArrowLeft'] || mobileInput.left),
+    r: !!(keys['KeyD'] || keys['ArrowRight'] || mobileInput.right),
+    fire: !!(keys['Space'] || mobileInput.fire),
+    mine: !!((keys['KeyE'] && !prevKeys['KeyE']) || (mobileInput.mine && !prevMobileInput.mine)),
     sat: !!(keys['KeyC'] && !prevKeys['KeyC']),
-    scopeToggle: !!(keys['KeyZ'] && !prevKeys['KeyZ']),
-    weaponToggle: !!(keys['KeyQ'] && !prevKeys['KeyQ'])
+    scopeToggle: !!((keys['KeyZ'] && !prevKeys['KeyZ']) || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle)),
+    weaponToggle: !!((keys['KeyQ'] && !prevKeys['KeyQ']) || (mobileInput.weaponToggle && !prevMobileInput.weaponToggle))
   };
 }
 
@@ -1686,12 +2115,24 @@ function gameLoop() {
       movePlayer(player, controls, dt);
 
       if (input.fire) {
-        fire(player);
+        if (player.usingSatellite && !player.satelliteFiring) {
+          fireSatelliteLaser(player);
+        } else {
+          fire(player);
+        }
       }
       if (input.mine) {
         createMine(player);
       }
       if (input.sat && player.hasSatellite) {
+        player.hasSatellite = false;
+        player.usingSatellite = true;
+        player.satelliteFiring = false;
+        if (player.mesh) {
+          player.satelliteTarget.x = player.mesh.position.x;
+          player.satelliteTarget.z = player.mesh.position.z;
+        }
+      } else if (input.sat && player.usingSatellite && !player.satelliteFiring) {
         fireSatelliteLaser(player);
       }
       if (input.scopeToggle) {
@@ -1706,27 +2147,44 @@ function gameLoop() {
     const localPlayer = players[localPlayerIndex];
     if (localPlayer && localPlayer.alive) {
       const controls = {
-        forward: keys['KeyW'] || keys['ArrowUp'],
-        backward: keys['KeyS'] || keys['ArrowDown'],
-        left: keys['KeyA'] || keys['ArrowLeft'],
-        right: keys['KeyD'] || keys['ArrowRight']
+        forward: keys['KeyW'] || keys['ArrowUp'] || mobileInput.forward,
+        backward: keys['KeyS'] || keys['ArrowDown'] || mobileInput.backward,
+        left: keys['KeyA'] || keys['ArrowLeft'] || mobileInput.left,
+        right: keys['KeyD'] || keys['ArrowRight'] || mobileInput.right
       };
       movePlayer(localPlayer, controls, dt);
 
-      if (keys['Space'] && !prevKeys['Space']) {
-        fire(localPlayer);
+      const firePressed = !!(keys['Space'] || mobileInput.fire);
+      const firePrev = !!(prevKeys['Space'] || prevMobileInput.fire);
+      if (firePressed && !firePrev) {
+        if (localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
+          fireSatelliteLaser(localPlayer);
+        } else {
+          fire(localPlayer);
+        }
       }
-      if (keys['KeyE'] && !prevKeys['KeyE']) {
+      const minePressed = !!((keys['KeyE'] && !prevKeys['KeyE']) || (mobileInput.mine && !prevMobileInput.mine));
+      if (minePressed) {
         createMine(localPlayer);
       }
-      if (keys['KeyC'] && !prevKeys['KeyC'] && localPlayer.hasSatellite) {
-        fireSatelliteLaser(localPlayer);
+      if (keys['KeyC'] && !prevKeys['KeyC']) {
+        if (localPlayer.hasSatellite) {
+          localPlayer.hasSatellite = false;
+          localPlayer.usingSatellite = true;
+          localPlayer.satelliteFiring = false;
+          localPlayer.satelliteTarget.x = localPlayer.mesh.position.x;
+          localPlayer.satelliteTarget.z = localPlayer.mesh.position.z;
+        } else if (localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
+          fireSatelliteLaser(localPlayer);
+        }
       }
-      if (keys['KeyZ'] && !prevKeys['KeyZ']) {
+      const scopePressed = !!((keys['KeyZ'] && !prevKeys['KeyZ']) || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle));
+      if (scopePressed) {
         localPlayer.scoping = !localPlayer.scoping;
         scoping = localPlayer.scoping;
       }
-      if (keys['KeyQ'] && !prevKeys['KeyQ']) {
+      const weaponPressed = !!((keys['KeyQ'] && !prevKeys['KeyQ']) || (mobileInput.weaponToggle && !prevMobileInput.weaponToggle));
+      if (weaponPressed) {
         toggleWeapon(localPlayer);
       }
 
@@ -1772,7 +2230,10 @@ function gameLoop() {
           w: p.weapon,
           alive: p.alive,
           us: p.usingSatellite,
-          sc: p.scoping
+          sf: p.satelliteFiring,
+          sc: p.scoping,
+          tx: p.satelliteTarget ? p.satelliteTarget.x : 0,
+          tz: p.satelliteTarget ? p.satelliteTarget.z : 0
         }))
       };
       broadcast(state);
@@ -1797,6 +2258,15 @@ function gameLoop() {
   for (const key in keys) {
     prevKeys[key] = keys[key];
   }
+
+  prevMobileInput.forward = mobileInput.forward;
+  prevMobileInput.backward = mobileInput.backward;
+  prevMobileInput.left = mobileInput.left;
+  prevMobileInput.right = mobileInput.right;
+  prevMobileInput.fire = mobileInput.fire;
+  prevMobileInput.mine = mobileInput.mine;
+  prevMobileInput.scopeToggle = mobileInput.scopeToggle;
+  prevMobileInput.weaponToggle = mobileInput.weaponToggle;
 
   requestAnimationFrame(gameLoop);
 }
@@ -1865,9 +2335,9 @@ function startGame(startCfg = null) {
 
   // Initialize all players
   players = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < playerCount; i++) {
     const p = createPlayerState(i);
-    p.alive = i < playerCount;
+    p.alive = true;
     p.hasSatellite = false;
     p.name = (lobbyState.players[i] && lobbyState.players[i].name) || PLAYER_NAMES[i];
     
@@ -1989,8 +2459,8 @@ document.getElementById('btn-start').addEventListener('click', () => {
       mines: document.getElementById('opt-mines').checked,
       satellite: document.getElementById('opt-satellite').checked
     };
-    startGame();
-    broadcast({ t: 'start', cfg });
+    startGame(cfg);
+    broadcast({ t: 'start', cfg, players: lobbyState.players });
   }
 });
 
@@ -2002,8 +2472,15 @@ document.getElementById('btn-restart').addEventListener('click', () => {
     bullets = [];
     mines.forEach(m => { if (m.mesh) scene.remove(m.mesh); });
     mines = [];
-    startGame();
-    broadcast({ t: 'start' });
+    const cfg = {
+      collision: document.getElementById('opt-collision').checked,
+      poison: document.getElementById('opt-poison').checked,
+      spread: document.getElementById('opt-spread').checked,
+      mines: document.getElementById('opt-mines').checked,
+      satellite: document.getElementById('opt-satellite').checked
+    };
+    startGame(cfg);
+    broadcast({ t: 'start', cfg, players: lobbyState.players });
   }
 });
 
