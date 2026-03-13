@@ -93,6 +93,30 @@ body {
 }
 .btn-secondary:hover { background: rgba(255,255,255,0.15); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-back {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  z-index: 2600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(8, 16, 32, 0.7);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #fff;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.2);
+}
+.page-back:hover {
+  background: rgba(12, 26, 48, 0.86);
+}
 .input-group { margin: 15px 0; }
 .input-group label { display: block; margin-bottom: 6px; color: #888; font-size: 14px; }
 .input-group input {
@@ -211,6 +235,28 @@ body {
   background: linear-gradient(90deg, #00ff88, #00c6ff);
   transition: width 0.3s;
 }
+.p-info .stamina-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #d7e0eb;
+}
+.p-info .stamina-bar {
+  width: 100%;
+  height: 7px;
+  background: rgba(255,255,255,0.14);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.p-info .stamina-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #ffe066, #ff9f43);
+  transition: width 0.2s;
+}
 .p-info .weapon {
   font-size: 12px;
   color: #aaa;
@@ -304,6 +350,20 @@ body {
   touch-action: none;
 }
 
+.mobile-joystick::after {
+  content: '';
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 210, 102, 0.35);
+  pointer-events: none;
+}
+
+.mobile-joystick.boost-ready::after {
+  border-color: rgba(255, 170, 32, 0.95);
+  box-shadow: 0 0 16px rgba(255, 170, 32, 0.35);
+}
+
 .joystick-knob {
   position: absolute;
   left: 50%;
@@ -366,6 +426,31 @@ body {
 #mb-weapon { right: 94px; bottom: 10px; }
 #mb-mine { right: 0; bottom: 98px; }
 #mb-scope { right: 94px; bottom: 108px; }
+#satellite-pad {
+  position: absolute;
+  left: 148px;
+  bottom: 10px;
+  width: 118px;
+  height: 118px;
+  display: none;
+}
+#satellite-pad.active { display: block; }
+.sat-pad-btn {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(8, 12, 24, 0.68);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+}
+.sat-pad-btn.active { background: rgba(36, 68, 128, 0.92); }
+#mb-sat-up { left: 37px; top: 0; }
+#mb-sat-left { left: 0; top: 37px; }
+#mb-sat-right { right: 0; top: 37px; }
+#mb-sat-down { left: 37px; bottom: 0; }
 
 @media (max-width: 900px), (pointer: coarse) {
   .controls-hint { display: none; }
@@ -380,6 +465,8 @@ body {
 </style>
 </head>
 <body>
+
+<a class="page-back" href="/">返回主页</a>
 
 <div id="lobby">
   <div class="lobby-card" id="lobby-main">
@@ -437,6 +524,8 @@ body {
     <div class="p-info" id="p-info-local">
       <div class="name"><span class="player-dot"></span><span class="player-name">你</span></div>
       <div class="hp-bar"><div class="hp-fill" style="width:100%"></div></div>
+      <div class="stamina-row"><span>体力</span><span class="stamina-text">100%</span></div>
+      <div class="stamina-bar"><div class="stamina-fill" style="width:100%"></div></div>
       <div class="weapon">武器: <span>机枪</span></div>
     </div>
   </div>
@@ -448,8 +537,7 @@ body {
     <kbd>Space</kbd> 射击 
     <kbd>Q</kbd> 切换武器 
     <kbd>E</kbd> 放置地雷 
-    <kbd>Z</kbd> 瞄准镜 
-    <kbd>C</kbd> 卫星激光
+    <kbd>Z</kbd> 瞄准镜
   </div>
 </div>
 
@@ -489,6 +577,12 @@ body {
         <line x1="19" y1="19" x2="27" y2="27" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"/>
       </svg>
     </button>
+  </div>
+  <div id="satellite-pad" aria-hidden="true">
+    <button class="sat-pad-btn" id="mb-sat-up" type="button" aria-label="卫星上移">▲</button>
+    <button class="sat-pad-btn" id="mb-sat-left" type="button" aria-label="卫星左移">◀</button>
+    <button class="sat-pad-btn" id="mb-sat-right" type="button" aria-label="卫星右移">▶</button>
+    <button class="sat-pad-btn" id="mb-sat-down" type="button" aria-label="卫星下移">▼</button>
   </div>
 </div>
 
@@ -537,10 +631,14 @@ const SATELLITE_RADIUS = 10;
 const SATELLITE_DAMAGE = 75;
 const SATELLITE_EFFECT_MS = 1500;
 const SATELLITE_RESPAWN = 30000;
+const MAX_STAMINA = 100;
+const STAMINA_RECOVERY = 2;
+const BOOST_STAMINA_DRAIN = 24;
+const BOOST_STAMINA_MIN_START = 10;
 
 const WEAPONS = {
   mg: { name: '机枪', dmg: 1, cd: 50, speed: 120, color: 0xff4400, size: 0.15 },
-  cannon: { name: '加农炮', dmg: 25, cd: 800, speed: 45, color: 0xffaa00, size: 0.4 }
+  cannon: { name: '加农炮', dmg: 25, cd: 1200, speed: 45, color: 0xffaa00, size: 0.4 }
 };
 
 const PLAYER_COLORS = [0x00c6ff, 0xff512f, 0x00ff88, 0xffaa00];
@@ -588,14 +686,14 @@ let scopeCanvas, scopeCtx;
 let satelliteCanvas, satelliteCtx;
 let minimapCanvas, minimapCtx;
 let isMobileTouch = false;
-let mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false };
-let prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false };
+let mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false };
+let prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false };
 
 // ============== THREE.JS SETUP ==============
 function initThree() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1a2e);
-  scene.fog = new THREE.Fog(0x1a1a2e, 80, 200);
+  scene.background = new THREE.Color(0xd9f1ff);
+  scene.fog = new THREE.Fog(0xd9f1ff, 140, 280);
 
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -609,11 +707,14 @@ function initThree() {
   document.getElementById('canvas-container').appendChild(renderer.domElement);
 
   // Lighting
-  const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+  const hemi = new THREE.HemisphereLight(0xf4fbff, 0x8eb070, 0.55);
+  scene.add(hemi);
+
+  const ambient = new THREE.AmbientLight(0xffffff, 1.08);
   scene.add(ambient);
 
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
-  dirLight.position.set(50, 100, 50);
+  const dirLight = new THREE.DirectionalLight(0xfff7e0, 1.35);
+  dirLight.position.set(62, 110, 40);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.width = 2048;
   dirLight.shadow.mapSize.height = 2048;
@@ -627,14 +728,14 @@ function initThree() {
 
   // Floor
   const floorGeo = new THREE.PlaneGeometry(200, 200);
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x2d5a27 });
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x7fbe63 });
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI/2;
   floor.receiveShadow = true;
   scene.add(floor);
 
   // Grid
-  const grid = new THREE.GridHelper(200, 40, 0x444444, 0x333333);
+  const grid = new THREE.GridHelper(200, 40, 0x6a9360, 0x7da26f);
   scene.add(grid);
 
   // Canvas setup
@@ -682,6 +783,8 @@ function setupMobileControls() {
     mobileInput.backward = false;
     mobileInput.left = false;
     mobileInput.right = false;
+    mobileInput.boost = false;
+    stick.classList.remove('boost-ready');
     knob.style.transform = 'translate(0px, 0px)';
     sendImmediateClientInput();
   };
@@ -707,6 +810,9 @@ function setupMobileControls() {
     mobileInput.backward = ny > dead;
     mobileInput.left = nx < -dead;
     mobileInput.right = nx > dead;
+    const boostZone = dist / Math.max(maxR, 1) >= 0.88;
+    mobileInput.boost = boostZone;
+    stick.classList.toggle('boost-ready', boostZone);
     sendImmediateClientInput();
   };
 
@@ -762,6 +868,24 @@ function setupMobileControls() {
   mineBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); triggerTapAction('mine', mineBtn); });
   scopeBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); triggerTapAction('scopeToggle', scopeBtn); });
 
+  const bindSatelliteHold = (id, field) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const setPressed = (on) => {
+      mobileInput[field] = on;
+      btn.classList.toggle('active', on);
+      sendImmediateClientInput();
+    };
+    btn.addEventListener('pointerdown', (e) => { e.preventDefault(); setPressed(true); });
+    btn.addEventListener('pointerup', (e) => { e.preventDefault(); setPressed(false); });
+    btn.addEventListener('pointercancel', (e) => { e.preventDefault(); setPressed(false); });
+    btn.addEventListener('pointerleave', () => { setPressed(false); });
+  };
+  bindSatelliteHold('mb-sat-up', 'satUp');
+  bindSatelliteHold('mb-sat-down', 'satDown');
+  bindSatelliteHold('mb-sat-left', 'satLeft');
+  bindSatelliteHold('mb-sat-right', 'satRight');
+
   satelliteCanvas.addEventListener('pointerdown', (e) => {
     if (!gameStarted || localPlayerIndex < 0) return;
     const player = players[localPlayerIndex];
@@ -802,6 +926,7 @@ function createPlayerState(index) {
     speed: 16,
     boosting: false,
     boostEndTime: 0,
+    stamina: MAX_STAMINA,
     lastTapKey: '',
     lastTapTime: 0,
     lastShot: 0,
@@ -820,7 +945,8 @@ function createPlayerState(index) {
     alive: true,
     x: 0, z: 0, rotation: 0,
     prevX: 0, prevZ: 0,
-    input: { f: false, b: false, l: false, r: false, fire: false, mine: false, scope: false, sat: false }
+    prevForwardPressed: false,
+    input: { f: false, b: false, l: false, r: false, fire: false, mine: false, scope: false, sat: false, su: false, sd: false, sl: false, sr: false, scopeToggle: false, weaponToggle: false }
   };
 }
 
@@ -863,7 +989,26 @@ function createTankMesh(color) {
   hatch.position.y = 1.35;
   group.add(hatch);
 
+  const hpBarAnchor = new THREE.Object3D();
+  hpBarAnchor.position.set(0, 4.2, 0);
+  const hpBarBg = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0x111111, transparent: true, opacity: 0.56, depthTest: false, depthWrite: false }));
+  hpBarBg.scale.set(3.1, 0.36, 1);
+  const hpBarFill = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xff5a5f, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false }));
+  hpBarFill.center.set(0, 0.5);
+  hpBarFill.position.set(-1.42, 0, 0.02);
+  hpBarFill.scale.set(2.84, 0.22, 1);
+  hpBarAnchor.add(hpBarBg, hpBarFill);
+  group.userData.hpBarFill = hpBarFill;
+  group.add(hpBarAnchor);
+
   return { group, muzzle };
+}
+
+function updateTankHpBar(player) {
+  if (!player || !player.mesh || !player.mesh.userData.hpBarFill) return;
+  const ratio = Math.max(0, Math.min(1, player.hp / 100));
+  player.mesh.userData.hpBarFill.scale.x = 2.84 * ratio;
+  player.mesh.userData.hpBarFill.visible = player.alive && player.hp > 0 && player.index !== localPlayerIndex;
 }
 
 function darkenColor(hex, factor) {
@@ -1036,22 +1181,24 @@ function spawnHealthPacks() {
 
 function createGrassPatch(x, z, radius) {
   const group = new THREE.Group();
-  const baseGeo = new THREE.CylinderGeometry(radius, radius, 0.1, 16);
-  const baseMat = new THREE.MeshStandardMaterial({ color: 0x228822 });
+  const baseGeo = new THREE.CylinderGeometry(radius, radius, 0.14, 16);
+  const baseMat = new THREE.MeshStandardMaterial({ color: 0x2f6a2b });
   const base = new THREE.Mesh(baseGeo, baseMat);
-  base.position.y = 0.05;
+  base.position.y = 0.07;
   group.add(base);
 
-  for (let i = 0; i < 18; i++) {
-    const angle = (i / 18) * Math.PI * 2 + Math.random() * 0.3;
+  const bladeCount = 34;
+  for (let i = 0; i < bladeCount; i++) {
+    const angle = (i / bladeCount) * Math.PI * 2 + Math.random() * 0.3;
     const dist = Math.random() * (radius - 0.3);
-    const h = 0.8 + Math.random() * 0.6;
-    const bladeGeo = new THREE.ConeGeometry(0.1, h, 4);
+    const h = 5.4 + Math.random() * 1.4;
+    const bladeGeo = new THREE.ConeGeometry(0.22 + Math.random() * 0.1, h, 5);
     const bladeMat = new THREE.MeshStandardMaterial({ color: 0x44aa44 });
     const blade = new THREE.Mesh(bladeGeo, bladeMat);
     blade.position.set(Math.cos(angle) * dist, h/2, Math.sin(angle) * dist);
     blade.rotation.x = (Math.random() - 0.5) * 0.2;
     blade.rotation.z = (Math.random() - 0.5) * 0.2;
+    blade.castShadow = true;
     group.add(blade);
   }
 
@@ -1219,25 +1366,29 @@ function createMine(player) {
   player.lastMineTime = now;
 
   const pos = player.mesh.position.clone();
-  pos.z -= 2;
-  pos.applyQuaternion(player.mesh.quaternion);
 
   const mine = {
     x: pos.x,
     z: pos.z,
     owner: player.index,
     armed: false,
-    armedAt: now + 250,
     mesh: null
   };
 
   const geo = new THREE.CylinderGeometry(0.5, 0.6, 0.3, 8);
-  const mat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+  const mat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.35, roughness: 0.72 });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(mine.x, 0.15, mine.z);
-  mesh.visible = false;
   scene.add(mesh);
   mine.mesh = mesh;
+
+  const indicatorGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.08, 16);
+  const indicatorMat = new THREE.MeshStandardMaterial({ color: 0xffc107, emissive: 0x8a4b00, emissiveIntensity: 1.1 });
+  const indicator = new THREE.Mesh(indicatorGeo, indicatorMat);
+  indicator.position.y = 0.2;
+  indicator.castShadow = true;
+  mesh.add(indicator);
+  mine.indicator = indicator;
 
   mines.push(mine);
   broadcast({ t: 'mine', p: player.index, x: mine.x, z: mine.z });
@@ -1469,16 +1620,22 @@ function updateHealthPacks(dt) {
 function updateMines(dt) {
   const now = performance.now();
   for (const mine of mines) {
-    if (!mine.armed && now > mine.armedAt) {
-      mine.armed = true;
-      if (mine.mesh) mine.mesh.visible = true;
+    if (!mine.armed) {
+      const owner = players[mine.owner];
+      if (!owner || !owner.mesh || !owner.alive || Math.hypot(owner.mesh.position.x - mine.x, owner.mesh.position.z - mine.z) > TANK_RADIUS + MINE_RADIUS + 0.1) {
+        mine.armed = true;
+        if (mine.indicator) {
+          mine.indicator.material.color.setHex(0xff3b30);
+          mine.indicator.material.emissive.setHex(0xaa1208);
+        }
+      }
     }
 
     if (mine.armed) {
       mine.mesh.rotation.y += dt * 2;
       
       for (const player of players) {
-        if (!player.alive || !player.mesh || player.index === mine.owner) continue;
+        if (!player.alive || !player.mesh) continue;
         const dx = player.mesh.position.x - mine.x;
         const dz = player.mesh.position.z - mine.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
@@ -1510,17 +1667,7 @@ function updateSatellitePickup(dt) {
   satellitePickup.mesh.rotation.y += dt * 1.5;
   satellitePickup.mesh.position.y = 2.6 + Math.sin(now * 0.0035) * 0.45;
 
-  if (!satellitePickup.mesh.visible) {
-    if (satellitePickup.respawnAt && now > satellitePickup.respawnAt) {
-      const pos = findSafeSpawnPosition(30, 8, 10, 8);
-      satellitePickup.x = pos.x;
-      satellitePickup.z = pos.z;
-      satellitePickup.mesh.position.set(pos.x, 2.6, pos.z);
-      satellitePickup.mesh.visible = true;
-      satellitePickup.respawnAt = 0;
-    }
-    return;
-  }
+  if (!satellitePickup.mesh.visible) return;
 
   for (const player of players) {
     if (!player.alive || !player.mesh || player.usingSatellite) continue;
@@ -1537,7 +1684,7 @@ function updateSatellitePickup(dt) {
       player.satelliteTarget.z = player.mesh.position.z;
       if (player.index === localPlayerIndex) scoping = false;
       satellitePickup.mesh.visible = false;
-      satellitePickup.respawnAt = now + SATELLITE_RESPAWN;
+      satellitePickup.respawnAt = 0;
       broadcast({ t: 'satpick', p: player.index });
       break;
     }
@@ -1552,18 +1699,18 @@ function updateSatellitePlayers(dt) {
     if (!player.satelliteFiring) {
       const targetSpeed = SATELLITE_TARGET_SPEED * dt;
       let up = false, down = false, left = false, right = false;
-      if (player.index === localPlayerIndex) {
-        up = !!(keys['KeyW'] || keys['ArrowUp']);
-        down = !!(keys['KeyS'] || keys['ArrowDown']);
-        left = !!(keys['KeyA'] || keys['ArrowLeft']);
-        right = !!(keys['KeyD'] || keys['ArrowRight']);
-      } else {
-        const input = player.input || {};
-        up = !!input.f;
-        down = !!input.b;
-        left = !!input.l;
-        right = !!input.r;
-      }
+    if (player.index === localPlayerIndex) {
+      up = !!(keys['KeyW'] || keys['ArrowUp'] || mobileInput.forward || mobileInput.satUp);
+      down = !!(keys['KeyS'] || keys['ArrowDown'] || mobileInput.backward || mobileInput.satDown);
+      left = !!(keys['KeyA'] || keys['ArrowLeft'] || mobileInput.left || mobileInput.satLeft);
+      right = !!(keys['KeyD'] || keys['ArrowRight'] || mobileInput.right || mobileInput.satRight);
+    } else {
+      const input = player.input || {};
+      up = !!(input.f || input.su);
+      down = !!(input.b || input.sd);
+      left = !!(input.l || input.sl);
+      right = !!(input.r || input.sr);
+    }
       if (up) player.satelliteTarget.z -= targetSpeed;
       if (down) player.satelliteTarget.z += targetSpeed;
       if (left) player.satelliteTarget.x -= targetSpeed;
@@ -1598,7 +1745,7 @@ function updateSatellitePlayers(dt) {
     // Apply damage during firing window; each target can only be hit once per shot.
     if (!player.satelliteHitTargets) player.satelliteHitTargets = new Set();
     for (const target of players) {
-      if (!target.alive || target.index === player.index || !target.mesh) continue;
+      if (!target.alive || !target.mesh) continue;
       if (player.satelliteHitTargets.has(target.index)) continue;
       const dx = target.mesh.position.x - player.satelliteTarget.x;
       const dz = target.mesh.position.z - player.satelliteTarget.z;
@@ -1686,7 +1833,13 @@ function updateHitFlash(dt) {
 
 // ============== MOVEMENT ==============
 function movePlayer(player, controls, dt) {
-  if (!player.alive || !player.mesh || player.usingSatellite) return;
+  if (!player.alive || !player.mesh) return;
+
+  if (player.usingSatellite || player.satelliteFiring) {
+    player.boosting = false;
+    player.stamina = Math.min(MAX_STAMINA, player.stamina + STAMINA_RECOVERY * dt);
+    return;
+  }
 
   player.prevX = player.mesh.position.x;
   player.prevZ = player.mesh.position.z;
@@ -1697,6 +1850,14 @@ function movePlayer(player, controls, dt) {
   if (player.scoping) {
     speed *= SCOPE_SPEED_MULT;
     turnSpeed *= SCOPE_TURN_MULT;
+  }
+
+  player.boosting = (player.boosting || controls.boost) && !!controls.forward && player.stamina > 0;
+  if (player.boosting) {
+    player.stamina = Math.max(0, player.stamina - BOOST_STAMINA_DRAIN * dt);
+    if (player.stamina <= 0) player.boosting = false;
+  } else {
+    player.stamina = Math.min(MAX_STAMINA, player.stamina + STAMINA_RECOVERY * dt);
   }
 
   if (player.boosting) speed *= BOOST_MULTIPLIER;
@@ -1722,9 +1883,11 @@ function movePlayer(player, controls, dt) {
 
 // ============== RENDERING ==============
 function renderView() {
+  const satellitePad = document.getElementById('satellite-pad');
   if (localPlayerIndex < 0 || !players[localPlayerIndex] || !players[localPlayerIndex].alive) {
     camera.position.set(0, 50, 50);
     camera.lookAt(0, 0, 0);
+    if (satellitePad) satellitePad.classList.remove('active');
     renderer.render(scene, camera);
     return;
   }
@@ -1734,6 +1897,7 @@ function renderView() {
   const rot = player.mesh.rotation.y;
 
   if (player.usingSatellite) {
+    if (satellitePad) satellitePad.classList.add('active');
     camera.fov = NORMAL_FOV;
     camera.updateProjectionMatrix();
     camera.position.set(0, 180, 0.01);
@@ -1745,6 +1909,7 @@ function renderView() {
       scopeCtx.clearRect(0, 0, scopeCanvas.width, scopeCanvas.height);
     }
   } else if (scoping) {
+    if (satellitePad) satellitePad.classList.remove('active');
     camera.fov = SCOPE_FOV;
     camera.updateProjectionMatrix();
     const eyePos = player.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
@@ -1753,6 +1918,7 @@ function renderView() {
     camera.lookAt(lookTarget);
     scopeCanvas.classList.add('active');
   } else {
+    if (satellitePad) satellitePad.classList.remove('active');
     camera.fov = NORMAL_FOV;
     camera.updateProjectionMatrix();
     const offset = new THREE.Vector3(0, 5, 12).applyQuaternion(player.mesh.quaternion);
@@ -2085,7 +2251,11 @@ function updateHUD() {
   info.querySelector('.player-dot').style.backgroundColor = '#' + player.color.toString(16).padStart(6, '0');
   info.querySelector('.player-name').textContent = player.name;
   info.querySelector('.hp-fill').style.width = player.hp + '%';
+  info.querySelector('.stamina-fill').style.width = Math.max(0, player.stamina) + '%';
+  info.querySelector('.stamina-text').textContent = Math.round(Math.max(0, player.stamina)) + '%';
   info.querySelector('.weapon span').textContent = WEAPONS[player.weapon].name;
+
+  for (const tank of players) updateTankHpBar(tank);
 }
 
 // ============== NETWORKING ==============
@@ -2260,6 +2430,7 @@ function applyRemoteState(state) {
     player.mesh.position.z += (ps.z - player.mesh.position.z) * 0.3;
     player.mesh.rotation.y = ps.r;
     player.hp = ps.hp;
+    player.stamina = typeof ps.st === 'number' ? ps.st : player.stamina;
     player.weapon = ps.w;
     player.alive = ps.alive;
     player.hasSatellite = !!ps.hs;
@@ -2298,9 +2469,14 @@ function buildClientInput() {
     b: !!(keys['KeyS'] || keys['ArrowDown'] || mobileInput.backward),
     l: !!(keys['KeyA'] || keys['ArrowLeft'] || mobileInput.left),
     r: !!(keys['KeyD'] || keys['ArrowRight'] || mobileInput.right),
+    boost: !!mobileInput.boost,
     fire: !!(keys['Space'] || mobileInput.fire),
     mine: !!((keys['KeyE'] && !prevKeys['KeyE']) || (mobileInput.mine && !prevMobileInput.mine)),
     sat: !!(keys['KeyC'] && !prevKeys['KeyC']),
+    su: !!mobileInput.satUp,
+    sd: !!mobileInput.satDown,
+    sl: !!mobileInput.satLeft,
+    sr: !!mobileInput.satRight,
     scopeToggle: !!((keys['KeyZ'] && !prevKeys['KeyZ']) || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle)),
     weaponToggle: !!((keys['KeyQ'] && !prevKeys['KeyQ']) || (mobileInput.weaponToggle && !prevMobileInput.weaponToggle))
   };
@@ -2321,11 +2497,22 @@ function gameLoop() {
     for (const player of players) {
       if (!player.alive || player.index === localPlayerIndex) continue;
       const input = player.input || {};
+      if (input.f && !player.prevForwardPressed) {
+        const now = performance.now();
+        if (now - player.lastTapTime < DOUBLE_TAP_MS && player.lastTapKey === 'forward' && player.stamina >= BOOST_STAMINA_MIN_START) {
+          player.boosting = true;
+          player.boostEndTime = now + BOOST_DURATION;
+        }
+        player.lastTapKey = 'forward';
+        player.lastTapTime = now;
+      }
+      player.prevForwardPressed = !!input.f;
       const controls = {
         forward: input.f || false,
         backward: input.b || false,
         left: input.l || false,
-        right: input.r || false
+        right: input.r || false,
+        boost: input.boost || false
       };
       movePlayer(player, controls, dt);
 
@@ -2367,18 +2554,19 @@ function gameLoop() {
         forward: keys['KeyW'] || keys['ArrowUp'] || mobileInput.forward,
         backward: keys['KeyS'] || keys['ArrowDown'] || mobileInput.backward,
         left: keys['KeyA'] || keys['ArrowLeft'] || mobileInput.left,
-        right: keys['KeyD'] || keys['ArrowRight'] || mobileInput.right
+        right: keys['KeyD'] || keys['ArrowRight'] || mobileInput.right,
+        boost: mobileInput.boost || false
       };
       movePlayer(localPlayer, controls, dt);
 
       const firePressed = !!(keys['Space'] || mobileInput.fire);
       const firePrev = !!(prevKeys['Space'] || prevMobileInput.fire);
-      if (firePressed && !firePrev) {
-        if (localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
+      if (localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
+        if (firePressed && !firePrev) {
           fireSatelliteLaser(localPlayer);
-        } else {
-          fire(localPlayer);
         }
+      } else if (firePressed) {
+        fire(localPlayer);
       }
       const minePressed = !!((keys['KeyE'] && !prevKeys['KeyE']) || (mobileInput.mine && !prevMobileInput.mine));
       if (minePressed) {
@@ -2414,7 +2602,7 @@ function gameLoop() {
       const now = performance.now();
       const tapKey = keys['KeyW'] ? 'KeyW' : (keys['ArrowUp'] ? 'ArrowUp' : null);
       if (tapKey && !prevKeys[tapKey]) {
-        if (now - localPlayer.lastTapTime < DOUBLE_TAP_MS && localPlayer.lastTapKey === tapKey) {
+        if (now - localPlayer.lastTapTime < DOUBLE_TAP_MS && localPlayer.lastTapKey === tapKey && localPlayer.stamina >= BOOST_STAMINA_MIN_START) {
           localPlayer.boosting = true;
           localPlayer.boostEndTime = now + BOOST_DURATION;
         }
@@ -2449,6 +2637,7 @@ function gameLoop() {
           z: p.mesh ? p.mesh.position.z : 0,
           r: p.rotation || 0,
           hp: p.hp,
+          st: p.stamina,
           w: p.weapon,
           alive: p.alive,
           hs: !!p.hasSatellite,
@@ -2506,6 +2695,7 @@ function gameLoop() {
   prevMobileInput.mine = mobileInput.mine;
   prevMobileInput.scopeToggle = mobileInput.scopeToggle;
   prevMobileInput.weaponToggle = mobileInput.weaponToggle;
+  prevMobileInput.boost = mobileInput.boost;
 
   if (gameStarted) {
     animationFrameId = requestAnimationFrame(gameLoop);
@@ -2577,8 +2767,8 @@ function startGame(startCfg = null) {
   }
   clearGameWorld();
   Object.keys(keys).forEach((key) => { keys[key] = false; prevKeys[key] = false; });
-  mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false };
-  prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false };
+  mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false };
+  prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false };
   gameStarted = true;
   gameStartTime = performance.now();
   const playerCount = Math.max(1, Math.min(4, lobbyState.players.length || 1));
@@ -2693,8 +2883,20 @@ document.getElementById('btn-connect').addEventListener('click', () => {
 });
 
 document.getElementById('btn-back').addEventListener('click', () => {
-  if (peer) peer.destroy();
-  window.location.href = '/';
+  if (peer) {
+    peer.destroy();
+    peer = null;
+  }
+  connections = [];
+  hostConnection = null;
+  isHost = false;
+  localPlayerIndex = -1;
+  lobbyState = { players: [] };
+  document.getElementById('players-container').innerHTML = '';
+  document.getElementById('my-room-id').textContent = '...';
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('btn-start').textContent = '等待玩家加入...';
+  showLobbySection('lobby-main');
 });
 
 document.getElementById('btn-cancel-join').addEventListener('click', () => {

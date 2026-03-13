@@ -11,6 +11,32 @@
             font-family: 'Microsoft YaHei', sans-serif;
         }
 
+        .page-back {
+            position: fixed;
+            top: 18px;
+            left: 18px;
+            z-index: 450;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 96px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            background: rgba(8, 16, 32, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: #fff;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .page-back:hover {
+            background: rgba(12, 26, 48, 0.86);
+        }
+
         #setup-ui {
             position: absolute;
             inset: 0;
@@ -320,6 +346,36 @@
             transition: width 0.12s;
         }
 
+        .stamina-row {
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.88);
+        }
+
+        .stamina-bar {
+            width: 300px;
+            height: 10px;
+            margin-top: 6px;
+            background: rgba(0, 0, 0, 0.42);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .right .stamina-bar {
+            margin-left: auto;
+        }
+
+        .stamina-fill {
+            height: 100%;
+            width: 100%;
+            transition: width 0.12s;
+            background: linear-gradient(90deg, #ffe066, #ff9f43);
+        }
+
         #p1-hp { background: #00f2ff; }
         #p2-hp { background: #ff512f; }
 
@@ -389,6 +445,7 @@
     </style>
 </head>
 <body>
+    <a class="page-back" href="/">返回主页</a>
     <div id="setup-ui">
         <div class="setup-card">
             <h1>BATTLE TANK</h1>
@@ -436,6 +493,8 @@
                     <span id="p1-weapon-text" class="weapon-tag">武器：机枪</span>
                 </div>
                 <div class="hp-bar"><div id="p1-hp" class="hp-fill"></div></div>
+                <div class="stamina-row"><span>体力</span><span id="p1-stamina-text">100%</span></div>
+                <div class="stamina-bar"><div id="p1-stamina" class="stamina-fill"></div></div>
             </div>
             <div class="p-info right">
                 <div class="p-name p2-color">红色坦克 (P2)</div>
@@ -444,6 +503,8 @@
                     <span id="p2-hp-text">HP 100</span>
                 </div>
                 <div class="hp-bar"><div id="p2-hp" class="hp-fill"></div></div>
+                <div class="stamina-row"><span id="p2-stamina-text">100%</span><span>体力</span></div>
+                <div class="stamina-bar"><div id="p2-stamina" class="stamina-fill"></div></div>
             </div>
         </div>
         <div id="poison-timer">毒圈: 150s</div>
@@ -508,6 +569,10 @@
         const SATELLITE_DAMAGE = 75;
         const SATELLITE_EFFECT_MS = 1500;
         const SATELLITE_RESPAWN = 30000;
+        const MAX_STAMINA = 100;
+        const STAMINA_RECOVERY = 2;
+        const BOOST_STAMINA_DRAIN = 24;
+        const BOOST_STAMINA_MIN_START = 10;
 
         const ACTION_LABELS = {
             forward: '前进',
@@ -527,11 +592,11 @@
 
         const WEAPONS = {
             mg: { name: '机枪', dmg: 1, cd: 50, speed: 120, color: 0xff4400, size: 0.15 },
-            cannon: { name: '加农炮', dmg: 25, cd: 800, speed: 45, color: 0xffaa00, size: 0.4 }
+            cannon: { name: '加农炮', dmg: 25, cd: 1200, speed: 45, color: 0xffaa00, size: 0.4 }
         };
 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB);
+        scene.background = new THREE.Color(0xd9f1ff);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -556,6 +621,14 @@
         const weaponTextEls = {
             p1: document.getElementById('p1-weapon-text'),
             p2: document.getElementById('p2-weapon-text')
+        };
+        const staminaFillEls = {
+            p1: document.getElementById('p1-stamina'),
+            p2: document.getElementById('p2-stamina')
+        };
+        const staminaTextEls = {
+            p1: document.getElementById('p1-stamina-text'),
+            p2: document.getElementById('p2-stamina-text')
         };
         const poisonTimerEl = document.getElementById('poison-timer');
 
@@ -599,6 +672,7 @@
                 speed: 16,
                 boosting: false,
                 boostEndTime: 0,
+                stamina: MAX_STAMINA,
                 lastTapKey: '',
                 lastTapTime: 0,
                 lastShot: 0,
@@ -777,21 +851,25 @@
 
         const floor = new THREE.Mesh(
             new THREE.PlaneGeometry(200, 200),
-            new THREE.MeshStandardMaterial({ color: 0x5e8c4f })
+            new THREE.MeshStandardMaterial({ color: 0x7fbe63 })
         );
         floor.rotation.x = -Math.PI / 2;
         floor.receiveShadow = true;
         scene.add(floor);
 
-        const grid = new THREE.GridHelper(200, 40, 0x446644, 0x446644);
+        const grid = new THREE.GridHelper(200, 40, 0x6a9360, 0x7da26f);
         scene.add(grid);
 
-        const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+        const hemi = new THREE.HemisphereLight(0xf4fbff, 0x8eb070, 0.55);
+        hemi.layers.enableAll();
+        scene.add(hemi);
+
+        const ambient = new THREE.AmbientLight(0xffffff, 1.08);
         ambient.layers.enableAll();
         scene.add(ambient);
 
-        const sun = new THREE.DirectionalLight(0xffffff, 1.1);
-        sun.position.set(30, 50, 30);
+        const sun = new THREE.DirectionalLight(0xfff7e0, 1.35);
+        sun.position.set(42, 70, 26);
         sun.castShadow = true;
         sun.shadow.mapSize.set(2048, 2048);
         sun.layers.enableAll();
@@ -825,9 +903,28 @@
             hatch.position.set(0, 1.45, 0.1);
             hatch.castShadow = true;
 
-            group.add(body, turret, gun, hatch);
+            const hpBarAnchor = new THREE.Object3D();
+            hpBarAnchor.position.set(0, 4.2, 0);
+            const hpBarBg = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0x111111, transparent: true, opacity: 0.56, depthTest: false, depthWrite: false }));
+            hpBarBg.scale.set(3.1, 0.36, 1);
+            const hpBarFill = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xff5a5f, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false }));
+            hpBarFill.center.set(0, 0.5);
+            hpBarFill.position.set(-1.42, 0, 0.02);
+            hpBarFill.scale.set(2.84, 0.22, 1);
+            hpBarAnchor.add(hpBarBg, hpBarFill);
+            group.userData.hpBarFill = hpBarFill;
+
+            group.add(body, turret, gun, hatch, hpBarAnchor);
             scene.add(group);
             return { group, muzzle };
+        }
+
+        function updateTankHpBar(playerKey) {
+            const player = players[playerKey];
+            if (!player || !player.mesh || !player.mesh.userData.hpBarFill) return;
+            const ratio = Math.max(0, Math.min(1, player.hp / 100));
+            player.mesh.userData.hpBarFill.scale.x = 2.84 * ratio;
+            player.mesh.userData.hpBarFill.visible = player.hp > 0;
         }
 
         // 坦克层分配（保留为空函数，隐身改用透明度方式）
@@ -1010,11 +1107,13 @@
             group.add(base);
 
             const bladeMat = new THREE.MeshStandardMaterial({ color: 0x4b9f40 });
-            for (let i = 0; i < 18; i++) {
-                const blade = new THREE.Mesh(new THREE.ConeGeometry(0.28 + Math.random() * 0.12, 2.2 + Math.random() * 1.0, 6), bladeMat);
+            const bladeCount = 34;
+            for (let i = 0; i < bladeCount; i++) {
+                const bladeHeight = 5.4 + Math.random() * 1.4;
+                const blade = new THREE.Mesh(new THREE.ConeGeometry(0.42 + Math.random() * 0.18, bladeHeight, 6), bladeMat);
                 const angle = Math.random() * Math.PI * 2;
                 const dist = Math.random() * (radius - 0.8);
-                blade.position.set(Math.cos(angle) * dist, 1.2, Math.sin(angle) * dist);
+                blade.position.set(Math.cos(angle) * dist, bladeHeight / 2, Math.sin(angle) * dist);
                 blade.rotation.z = (Math.random() - 0.5) * 0.25;
                 blade.rotation.x = (Math.random() - 0.5) * 0.25;
                 blade.castShadow = true;
@@ -1040,6 +1139,9 @@
             hpFillEls[playerKey].style.width = `${Math.max(0, player.hp)}%`;
             hpTextEls[playerKey].textContent = `HP ${Math.ceil(player.hp)}`;
             weaponTextEls[playerKey].textContent = `武器：${WEAPONS[player.weapon].name}`;
+            staminaFillEls[playerKey].style.width = `${Math.max(0, player.stamina)}%`;
+            staminaTextEls[playerKey].textContent = `${Math.round(Math.max(0, player.stamina))}%`;
+            updateTankHpBar(playerKey);
         }
 
         function updateAllHud() {
@@ -1126,8 +1228,10 @@
             const playerKey = player === players.p1 ? 'p1' : 'p2';
             if (!getMoveKeyCodes(playerKey).includes(code)) return;
             if (player.lastTapKey === code && now - player.lastTapTime <= DOUBLE_TAP_MS) {
-                player.boosting = true;
-                player.boostEndTime = now + BOOST_DURATION;
+                if (player.stamina >= BOOST_STAMINA_MIN_START) {
+                    player.boosting = true;
+                    player.boostEndTime = now + BOOST_DURATION;
+                }
             }
             player.lastTapKey = code;
             player.lastTapTime = now;
@@ -1197,16 +1301,15 @@
 
             const indicator = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.16, 0.16, 0.08, 16),
-                new THREE.MeshStandardMaterial({ color: 0xff3b30, emissive: 0xaa1208, emissiveIntensity: 1.1 })
+                new THREE.MeshStandardMaterial({ color: 0xffc107, emissive: 0x8a4b00, emissiveIntensity: 1.1 })
             );
             indicator.position.y = 0.2;
             indicator.castShadow = true;
             mineGroup.add(indicator);
             
             mineGroup.position.set(position.x, 0, position.z);
-            mineGroup.visible = false;
             scene.add(mineGroup);
-            mines.push({ mesh: mineGroup, owner: ownerKey, radius: MINE_RADIUS, armedAt: Date.now() + 250 });
+            mines.push({ mesh: mineGroup, owner: ownerKey, radius: MINE_RADIUS, armed: false, indicator });
         }
 
         function disposeMine(mine) {
@@ -1490,7 +1593,15 @@
 
             for (let i = mines.length - 1; i >= 0; i--) {
                 const mine = mines[i];
-                if (now < mine.armedAt) continue;
+                if (!mine.armed) {
+                    const owner = players[mine.owner];
+                    if (!owner || !owner.mesh || Math.hypot(owner.mesh.position.x - mine.mesh.position.x, owner.mesh.position.z - mine.mesh.position.z) > TANK_RADIUS + mine.radius + 0.1) {
+                        mine.armed = true;
+                        mine.indicator.material.color.setHex(0xff3b30);
+                        mine.indicator.material.emissive.setHex(0xaa1208);
+                    }
+                }
+                if (!mine.armed) continue;
                 for (const playerKey of ['p1', 'p2']) {
                     const player = players[playerKey];
                     const dx = player.mesh.position.x - mine.mesh.position.x;
@@ -1520,7 +1631,7 @@
                     if (Math.hypot(dx, dz) < 3) {
                         satellitePickup.active = false;
                         satellitePickup.mesh.visible = false;
-                        satellitePickup.respawnTime = now + SATELLITE_RESPAWN;
+                        satellitePickup.respawnTime = 0;
                         player.usingSatellite = true;
                         player.satelliteFiring = false;
                         player.satelliteDamageApplied = false;
@@ -1530,8 +1641,6 @@
                         break;
                     }
                 }
-            } else if (now > satellitePickup.respawnTime) {
-                spawnSatellitePickup();
             }
         }
 
@@ -1610,12 +1719,23 @@
 
         function movePlayer(playerKey, controls, fireKey, deltaSeconds) {
             const player = players[playerKey];
-            if (player.usingSatellite || player.satelliteFiring) return;
+            if (player.usingSatellite || player.satelliteFiring) {
+                player.boosting = false;
+                player.stamina = Math.min(MAX_STAMINA, player.stamina + STAMINA_RECOVERY * deltaSeconds);
+                updatePlayerHud(playerKey);
+                return;
+            }
             // 保存移动前的位置和朝向
             if (!player._prevPos) player._prevPos = new THREE.Vector3();
             player._prevPos.copy(player.mesh.position);
             player._prevRotY = player.mesh.rotation.y;
-            player.boosting = player.boosting && Date.now() < player.boostEndTime;
+            player.boosting = player.boosting && !!controls.forward && player.stamina > 0;
+            if (player.boosting) {
+                player.stamina = Math.max(0, player.stamina - BOOST_STAMINA_DRAIN * deltaSeconds);
+                if (player.stamina <= 0) player.boosting = false;
+            } else {
+                player.stamina = Math.min(MAX_STAMINA, player.stamina + STAMINA_RECOVERY * deltaSeconds);
+            }
             const scopeMult = player.scoping ? SCOPE_SPEED_MULT : 1;
             const boostMult = player.boosting ? BOOST_MULTIPLIER : 1;
             // 瞄准镜时移动速度为1/3；双击加速时恢复原速
@@ -1632,6 +1752,7 @@
 
             keepTankInBounds(player);
             resolveRockCollisions(playerKey);
+            updatePlayerHud(playerKey);
 
         }
 
