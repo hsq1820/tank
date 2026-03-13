@@ -806,6 +806,7 @@ function createPlayerState(index) {
     satelliteTarget: { x: 0, z: 0 },
     satelliteFireTime: 0,
     satelliteEndTime: 0,
+    satelliteHitTargets: null,
     satelliteBeam: null,
     satelliteDamageApplied: false,
     alive: true,
@@ -1156,6 +1157,7 @@ function fireSatelliteLaser(player) {
   player.satelliteFireTime = performance.now();
   player.satelliteEndTime = player.satelliteFireTime + SATELLITE_EFFECT_MS;
   player.satelliteDamageApplied = false;
+  player.satelliteHitTargets = new Set();
 
   const beam = createSatelliteBeamMesh();
   scene.add(beam);
@@ -1464,12 +1466,15 @@ function updateSatellitePlayers(dt) {
     }
 
     const now = performance.now();
-    if (player.satelliteEndTime > 0 && now >= player.satelliteEndTime) {
+    const shouldEndByEndTime = player.satelliteEndTime > 0 && now >= player.satelliteEndTime;
+    const shouldEndByFireTime = player.satelliteFireTime > 0 && (now - player.satelliteFireTime >= SATELLITE_EFFECT_MS);
+    if (shouldEndByEndTime || shouldEndByFireTime) {
       if (player.satelliteBeam) scene.remove(player.satelliteBeam);
       player.satelliteBeam = null;
       player.usingSatellite = false;
       player.satelliteFiring = false;
       player.satelliteEndTime = 0;
+      player.satelliteHitTargets = null;
       continue;
     }
 
@@ -1478,18 +1483,18 @@ function updateSatellitePlayers(dt) {
     // Update beam position
     player.satelliteBeam.position.set(player.satelliteTarget.x, 0, player.satelliteTarget.z);
 
-    // Apply damage
-    if (!player.satelliteDamageApplied) {
-      for (const target of players) {
-        if (!target.alive || target.index === player.index) continue;
-        const dx = target.mesh.position.x - player.satelliteTarget.x;
-        const dz = target.mesh.position.z - player.satelliteTarget.z;
-        if (Math.sqrt(dx * dx + dz * dz) < SATELLITE_RADIUS) {
-          applyDamage(target, SATELLITE_DAMAGE);
-          broadcast({ t: 'dmg', p: target.index, d: SATELLITE_DAMAGE, s: true });
-        }
+    // Apply damage during firing window; each target can only be hit once per shot.
+    if (!player.satelliteHitTargets) player.satelliteHitTargets = new Set();
+    for (const target of players) {
+      if (!target.alive || target.index === player.index || !target.mesh) continue;
+      if (player.satelliteHitTargets.has(target.index)) continue;
+      const dx = target.mesh.position.x - player.satelliteTarget.x;
+      const dz = target.mesh.position.z - player.satelliteTarget.z;
+      if (Math.sqrt(dx * dx + dz * dz) <= SATELLITE_RADIUS) {
+        applyDamage(target, SATELLITE_DAMAGE);
+        player.satelliteHitTargets.add(target.index);
+        broadcast({ t: 'dmg', p: target.index, d: SATELLITE_DAMAGE, s: true });
       }
-      player.satelliteDamageApplied = true;
     }
   }
 }
