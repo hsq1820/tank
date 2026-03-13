@@ -8,73 +8,447 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       min-height: 100vh;
-      display: grid;
-      place-items: center;
-      background: radial-gradient(circle at center, #1b2a49 0%, #090b12 100%);
+      background: radial-gradient(circle at top, #dff4ff 0%, #a8d5ff 36%, #4e7aa7 100%);
       font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
-      color: #fff;
-      padding: 20px;
+      color: #142235;
+      padding: 28px 18px 42px;
+    }
+    .shell {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
     }
     .card {
-      width: min(480px, 92vw);
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.18);
-      border-radius: 18px;
+      background: rgba(255,255,255,0.82);
+      border: 1px solid rgba(255,255,255,0.5);
+      border-radius: 22px;
+      box-shadow: 0 18px 40px rgba(14, 32, 52, 0.18);
       backdrop-filter: blur(10px);
+    }
+    .hero {
       padding: 34px 28px;
-      box-shadow: 0 18px 40px rgba(0,0,0,0.35);
       text-align: center;
     }
     h1 {
-      font-size: 34px;
+      font-size: clamp(30px, 5vw, 42px);
       letter-spacing: 2px;
       margin-bottom: 10px;
     }
-    p {
-      color: #d8e8ff;
-      margin-bottom: 28px;
+    .subtitle {
+      color: #45617f;
+      margin-bottom: 24px;
       line-height: 1.7;
     }
-    .btn {
+    .mode-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .mode-btn {
       display: block;
-      width: 100%;
       text-decoration: none;
-      border-radius: 14px;
-      padding: 15px 18px;
-      margin-top: 12px;
-      font-size: 18px;
+      color: #fff;
+      padding: 18px 16px;
+      border-radius: 18px;
+      font-size: 19px;
       font-weight: 700;
       letter-spacing: 0.5px;
-      transition: transform 0.16s, box-shadow 0.16s, background 0.16s;
-      border: 1px solid rgba(255,255,255,0.2);
-      color: #fff;
-      background: rgba(0,0,0,0.35);
+      transition: transform 0.16s, box-shadow 0.16s;
     }
-    .btn:hover {
+    .mode-btn:hover {
       transform: translateY(-2px);
-      box-shadow: 0 12px 28px rgba(0,0,0,0.28);
+      box-shadow: 0 14px 28px rgba(19, 47, 76, 0.22);
     }
-    .btn-local {
-      background: linear-gradient(135deg, rgba(0,200,255,0.95), rgba(0,130,255,0.95));
-      border: none;
+    .mode-local { background: linear-gradient(135deg, #00b6ff, #256dff); }
+    .mode-online { background: linear-gradient(135deg, #ff8d4d, #ff4d7a); }
+    .settings-card {
+      padding: 24px 22px 26px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      flex-wrap: wrap;
     }
-    .btn-online {
-      background: linear-gradient(135deg, rgba(255,110,70,0.95), rgba(255,60,110,0.95));
-      border: none;
+    .settings-title {
+      font-size: 24px;
+      margin-bottom: 8px;
     }
     .hint {
-      margin-top: 18px;
-      color: #a8b7d1;
+      color: #56708d;
+      font-size: 14px;
+      line-height: 1.6;
+      max-width: 620px;
+    }
+    .ghost-btn {
+      padding: 11px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(20,34,53,0.14);
+      background: rgba(255,255,255,0.8);
+      color: #18324d;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+      box-shadow: 0 10px 20px rgba(14, 32, 52, 0.08);
+    }
+    .ghost-btn:hover { background: rgba(255,255,255,0.94); }
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(8, 18, 32, 0.52);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 2000;
+    }
+    .modal.open { display: flex; }
+    .modal-card {
+      width: min(1020px, 100%);
+      max-height: min(88vh, 920px);
+      overflow: auto;
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(255,255,255,0.58);
+      border-radius: 22px;
+      box-shadow: 0 24px 52px rgba(14, 32, 52, 0.24);
+      padding: 22px;
+    }
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .modal-title { font-size: 24px; }
+    .status {
       font-size: 13px;
+      font-weight: 700;
+      color: #2a6b36;
+    }
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .section-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .binding-section {
+      background: rgba(240,247,255,0.86);
+      border: 1px solid rgba(20,34,53,0.08);
+      border-radius: 16px;
+      padding: 16px;
+    }
+    .binding-section h3 {
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+    .binding-list {
+      display: grid;
+      gap: 8px;
+    }
+    .binding-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px dashed rgba(20,34,53,0.1);
+    }
+    .binding-row:last-child { border-bottom: none; }
+    .binding-label { font-size: 14px; color: #284666; }
+    .bind-btn {
+      min-width: 92px;
+      padding: 8px 12px;
+      border: 1px solid rgba(20,34,53,0.14);
+      border-radius: 10px;
+      background: #fff;
+      color: #18324d;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .bind-btn.waiting {
+      background: #18324d;
+      color: #fff;
+      border-color: #18324d;
+    }
+    .footnote {
+      margin-top: 14px;
+      font-size: 13px;
+      color: #5c7390;
+      line-height: 1.7;
+    }
+    @media (max-width: 860px) {
+      .section-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 620px) {
+      .mode-actions { grid-template-columns: 1fr; }
+      .hero, .settings-card, .modal-card { padding-left: 18px; padding-right: 18px; }
     }
   </style>
 </head>
 <body>
-  <main class="card">
-    <h1>坦克大作战</h1>
-    <p>请选择游戏模式</p>
-    <a class="btn btn-local" href="/local">本地模式</a>
-    <a class="btn btn-online" href="/online">联机模式</a>
+  <main class="shell">
+    <section class="card hero">
+      <h1>坦克大作战</h1>
+      <p class="subtitle">选择模式开始战斗。主页里的键位设置会保存在当前浏览器，并同时作用于本地模式和联机模式。</p>
+      <div class="mode-actions">
+        <a class="mode-btn mode-local" href="/local">本地模式</a>
+        <a class="mode-btn mode-online" href="/online">联机模式</a>
+      </div>
+    </section>
+
+    <section class="card settings-card">
+      <div>
+        <div class="settings-title">键位设置</div>
+        <div class="hint">键位设置不会直接展开占满主页。点击按钮后会打开弹窗；如果新键位和已有动作冲突，会自动与原绑定互换。</div>
+      </div>
+      <button class="ghost-btn" id="open-settings" type="button">打开键位设置</button>
+    </section>
   </main>
+
+  <div class="modal" id="settings-modal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title">键位设置</div>
+          <div class="hint">点击键位按钮后按下新按键即可保存。设置只保存在当前设备/浏览器，不会影响其他联机玩家。</div>
+        </div>
+        <div class="status" id="save-status">已读取当前设备键位</div>
+      </div>
+      <div class="toolbar">
+        <button class="ghost-btn" id="reset-bindings" type="button">恢复默认键位</button>
+        <button class="ghost-btn" id="close-settings" type="button">关闭</button>
+      </div>
+      <div class="section-grid" id="binding-sections"></div>
+      <div class="footnote">联机模式只会修改本机发送给房主的输入，不会更改其他客户端的键位。</div>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'tank-keybinds-v1';
+    const DEFAULT_BINDINGS = {
+      local: {
+        p1: { forward: 'KeyW', backward: 'KeyS', left: 'KeyA', right: 'KeyD', fire: 'Space', weaponSwitch: 'KeyQ', scope: 'KeyE', mine: 'KeyZ' },
+        p2: { forward: 'ArrowUp', backward: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', fire: 'Enter', weaponSwitch: 'Quote', scope: 'Backslash', mine: 'BracketRight' }
+      },
+      online: { forward: 'KeyW', backward: 'KeyS', left: 'KeyA', right: 'KeyD', fire: 'Space', weaponSwitch: 'KeyQ', mine: 'KeyE', scope: 'KeyZ' }
+    };
+    const ACTION_LABELS = {
+      forward: '前进',
+      backward: '后退',
+      left: '左转',
+      right: '右转',
+      fire: '射击',
+      weaponSwitch: '切换武器',
+      scope: '瞄准镜',
+      mine: '放置地雷'
+    };
+    const SECTION_DEFS = [
+      { title: '本地模式 - P1', scope: 'local', player: 'p1' },
+      { title: '本地模式 - P2', scope: 'local', player: 'p2' },
+      { title: '联机模式 - 本机', scope: 'online', player: '' }
+    ];
+    let bindings = loadBindings();
+    let pendingBind = null;
+
+    function clone(obj) {
+      return JSON.parse(JSON.stringify(obj));
+    }
+
+    function getReadableKeyName(code) {
+      const map = {
+        Space: '空格',
+        Enter: '回车',
+        Quote: '\'',
+        Backslash: '\\',
+        BracketRight: ']',
+        BracketLeft: '[',
+        Semicolon: ';',
+        Comma: ',',
+        Period: '.',
+        Slash: '/',
+        Minus: '-',
+        Equal: '=',
+        Backquote: '`',
+        Escape: 'Esc',
+        ArrowUp: '↑',
+        ArrowDown: '↓',
+        ArrowLeft: '←',
+        ArrowRight: '→'
+      };
+      if (map[code]) return map[code];
+      if (code.startsWith('Key')) return code.slice(3);
+      if (code.startsWith('Digit')) return code.slice(5);
+      if (code.startsWith('Numpad')) return 'Num ' + code.slice(6);
+      return code;
+    }
+
+    function loadBindings() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return clone(DEFAULT_BINDINGS);
+        const parsed = JSON.parse(raw);
+        return {
+          local: {
+            p1: { ...DEFAULT_BINDINGS.local.p1, ...((parsed.local && parsed.local.p1) || {}) },
+            p2: { ...DEFAULT_BINDINGS.local.p2, ...((parsed.local && parsed.local.p2) || {}) }
+          },
+          online: { ...DEFAULT_BINDINGS.online, ...(parsed.online || {}) }
+        };
+      } catch (error) {
+        return clone(DEFAULT_BINDINGS);
+      }
+    }
+
+    function saveBindings(message) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(bindings));
+      document.getElementById('save-status').textContent = message || '已自动保存到当前设备';
+    }
+
+    function getBindingValue(section, action) {
+      if (section.scope === 'local') return bindings.local[section.player][action];
+      return bindings.online[action];
+    }
+
+    function setBindingValue(section, action, code) {
+      if (section.scope === 'local') bindings.local[section.player][action] = code;
+      else bindings.online[action] = code;
+    }
+
+    function isSameTarget(a, b) {
+      return a && b && a.scope === b.scope && a.player === b.player && a.action === b.action;
+    }
+
+    function describeTarget(target) {
+      const section = SECTION_DEFS.find((item) => item.scope === target.scope && (item.player || '') === (target.player || ''));
+      return `${section ? section.title : '当前设置'} - ${ACTION_LABELS[target.action] || target.action}`;
+    }
+
+    function findBindingByCode(code) {
+      for (const section of SECTION_DEFS) {
+        const template = section.scope === 'local' ? DEFAULT_BINDINGS.local.p1 : DEFAULT_BINDINGS.online;
+        for (const action of Object.keys(template)) {
+          if (getBindingValue(section, action) === code) {
+            return { scope: section.scope, player: section.player || '', action };
+          }
+        }
+      }
+      return null;
+    }
+
+    function assignBinding(target, newCode) {
+      const currentCode = getBindingValue(target, target.action);
+      if (currentCode === newCode) {
+        saveBindings(`“${ACTION_LABELS[target.action]}”保持为 ${getReadableKeyName(newCode)}`);
+        return;
+      }
+
+      const existing = findBindingByCode(newCode);
+      if (existing && !isSameTarget(existing, target)) {
+        setBindingValue(existing, existing.action, currentCode);
+        setBindingValue(target, target.action, newCode);
+        saveBindings(`${getReadableKeyName(newCode)} 已被 ${describeTarget(existing)} 占用，已与 ${describeTarget(target)} 自动互换`);
+      } else {
+        setBindingValue(target, target.action, newCode);
+        saveBindings(`已将 ${describeTarget(target)} 设为 ${getReadableKeyName(newCode)}`);
+      }
+    }
+
+    function renderBindings() {
+      const root = document.getElementById('binding-sections');
+      root.innerHTML = '';
+
+      for (const section of SECTION_DEFS) {
+        const card = document.createElement('section');
+        card.className = 'binding-section';
+
+        const title = document.createElement('h3');
+        title.textContent = section.title;
+        card.appendChild(title);
+
+        const list = document.createElement('div');
+        list.className = 'binding-list';
+        const template = section.scope === 'local' ? DEFAULT_BINDINGS.local.p1 : DEFAULT_BINDINGS.online;
+
+        for (const action of Object.keys(template)) {
+          const row = document.createElement('div');
+          row.className = 'binding-row';
+
+          const label = document.createElement('div');
+          label.className = 'binding-label';
+          label.textContent = ACTION_LABELS[action] || action;
+
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'bind-btn';
+          button.textContent = getReadableKeyName(getBindingValue(section, action));
+
+          const target = { scope: section.scope, player: section.player || '', action };
+          if (pendingBind && isSameTarget(pendingBind, target)) {
+            button.classList.add('waiting');
+            button.textContent = '按任意键';
+          }
+
+          button.addEventListener('click', () => {
+            pendingBind = target;
+            document.getElementById('save-status').textContent = `正在修改 ${describeTarget(target)}...`;
+            renderBindings();
+          });
+
+          row.append(label, button);
+          list.appendChild(row);
+        }
+
+        card.appendChild(list);
+        root.appendChild(card);
+      }
+    }
+
+    function closeModal() {
+      pendingBind = null;
+      document.getElementById('settings-modal').classList.remove('open');
+      document.getElementById('settings-modal').setAttribute('aria-hidden', 'true');
+      renderBindings();
+    }
+
+    function openModal() {
+      document.getElementById('settings-modal').classList.add('open');
+      document.getElementById('settings-modal').setAttribute('aria-hidden', 'false');
+      renderBindings();
+    }
+
+    document.getElementById('open-settings').addEventListener('click', openModal);
+    document.getElementById('close-settings').addEventListener('click', closeModal);
+    document.getElementById('settings-modal').addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) closeModal();
+    });
+
+    document.getElementById('reset-bindings').addEventListener('click', () => {
+      bindings = clone(DEFAULT_BINDINGS);
+      pendingBind = null;
+      saveBindings('已恢复默认键位');
+      renderBindings();
+    });
+
+    window.addEventListener('keydown', (event) => {
+      if (!pendingBind) return;
+      event.preventDefault();
+      if (event.code === 'Escape') {
+        pendingBind = null;
+        document.getElementById('save-status').textContent = '已取消修改';
+        renderBindings();
+        return;
+      }
+      assignBinding(pendingBind, event.code);
+      pendingBind = null;
+      renderBindings();
+    });
+  </script>
 </body>
 </html>

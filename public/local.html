@@ -445,7 +445,7 @@
     </style>
 </head>
 <body>
-    <a class="page-back" href="/">返回主页</a>
+    <a class="page-back" id="page-back" href="/">返回主页</a>
     <div id="setup-ui">
         <div class="setup-card">
             <h1>BATTLE TANK</h1>
@@ -585,10 +585,27 @@
             mine: '地雷'
         };
 
-        let keyBindings = {
+        const KEYBIND_STORAGE_KEY = 'tank-keybinds-v1';
+        const DEFAULT_LOCAL_KEY_BINDINGS = {
             p1: { forward: 'KeyW', backward: 'KeyS', left: 'KeyA', right: 'KeyD', fire: 'Space', weaponSwitch: 'KeyQ', scope: 'KeyE', mine: 'KeyZ' },
             p2: { forward: 'ArrowUp', backward: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', fire: 'Enter', weaponSwitch: 'Quote', scope: 'Backslash', mine: 'BracketRight' }
         };
+
+        function loadStoredLocalKeyBindings() {
+            try {
+                const raw = localStorage.getItem(KEYBIND_STORAGE_KEY);
+                if (!raw) return JSON.parse(JSON.stringify(DEFAULT_LOCAL_KEY_BINDINGS));
+                const parsed = JSON.parse(raw);
+                return {
+                    p1: { ...DEFAULT_LOCAL_KEY_BINDINGS.p1, ...((parsed.local && parsed.local.p1) || {}) },
+                    p2: { ...DEFAULT_LOCAL_KEY_BINDINGS.p2, ...((parsed.local && parsed.local.p2) || {}) }
+                };
+            } catch (error) {
+                return JSON.parse(JSON.stringify(DEFAULT_LOCAL_KEY_BINDINGS));
+            }
+        }
+
+        let keyBindings = loadStoredLocalKeyBindings();
 
         const WEAPONS = {
             mg: { name: '机枪', dmg: 1, cd: 50, speed: 120, color: 0xff4400, size: 0.15 },
@@ -2072,6 +2089,7 @@
         window.addEventListener('resize', resize);
 
         function startGame() {
+            document.getElementById('page-back').style.display = 'none';
             document.getElementById('keybind-modal').classList.remove('open');
             collisionDamageEnabled = document.getElementById('collision-damage').classList.contains('active');
             poisonCircleEnabled = document.getElementById('poison-circle').classList.contains('active');
@@ -2160,6 +2178,9 @@
                 rebindingTarget = null;
             }
         });
+
+        document.getElementById('open-keybind').style.display = 'none';
+        document.getElementById('keybind-modal').style.display = 'none';
 
         function animate(now) {
             requestAnimationFrame(animate);

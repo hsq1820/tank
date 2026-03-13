@@ -117,6 +117,7 @@ body {
 .page-back:hover {
   background: rgba(12, 26, 48, 0.86);
 }
+.page-back.hidden { display: none; }
 .input-group { margin: 15px 0; }
 .input-group label { display: block; margin-bottom: 6px; color: #888; font-size: 14px; }
 .input-group input {
@@ -145,6 +146,132 @@ body {
   min-height: 100px;
 }
 #player-list h3 { margin-bottom: 10px; font-size: 14px; color: #888; }
+.lobby-section {
+  margin-top: 18px;
+  padding: 16px;
+  background: rgba(0,0,0,0.28);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+}
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.section-header h3 {
+  font-size: 15px;
+  color: #dce8ff;
+}
+.small-btn {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.small-btn:hover { background: rgba(255,255,255,0.14); }
+.room-note {
+  font-size: 12px;
+  color: #9fb2cc;
+  line-height: 1.6;
+}
+.room-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+.room-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+.room-item:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(0,198,255,0.35);
+}
+.room-item:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+.room-item.count-changed {
+  animation: roomPulse 0.9s ease;
+  border-color: rgba(255, 196, 64, 0.72);
+  box-shadow: 0 0 0 1px rgba(255, 196, 64, 0.18), 0 10px 24px rgba(255, 196, 64, 0.12);
+}
+.room-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.room-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.room-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.room-subtitle {
+  font-size: 12px;
+  color: #9fb2cc;
+}
+.room-status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.room-status-chip.waiting {
+  background: rgba(0, 198, 255, 0.14);
+  color: #97ecff;
+}
+.room-status-chip.busy {
+  background: rgba(255, 196, 64, 0.16);
+  color: #ffe29b;
+}
+.room-status-chip.full {
+  background: rgba(255, 81, 47, 0.18);
+  color: #ffb1a2;
+}
+.room-change {
+  font-size: 11px;
+  color: #ffd36a;
+  font-weight: 700;
+}
+.room-id-chip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(0,198,255,0.14);
+  color: #9ee8ff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+@keyframes roomPulse {
+  0% { transform: scale(0.985); }
+  45% { transform: scale(1.01); }
+  100% { transform: scale(1); }
+}
 .player-item {
   display: flex;
   align-items: center;
@@ -466,13 +593,38 @@ body {
 </head>
 <body>
 
-<a class="page-back" href="/">返回主页</a>
+<a class="page-back" id="page-back" href="/">返回主页</a>
 
 <div id="lobby">
   <div class="lobby-card" id="lobby-main">
     <h1>坦克大作战 - 联机版</h1>
+    <div class="input-group">
+      <label>你的昵称</label>
+      <input type="text" id="main-player-name" placeholder="输入昵称" maxlength="12">
+    </div>
     <button class="btn btn-primary" id="btn-create">创建房间</button>
-    <button class="btn btn-secondary" id="btn-join">加入房间</button>
+
+    <div class="lobby-section">
+      <div class="section-header">
+        <h3>联机大厅</h3>
+        <button class="small-btn" id="btn-refresh-rooms" type="button">刷新房间</button>
+      </div>
+      <div class="room-note" id="room-list-note">正在准备房间大厅...</div>
+      <div class="room-list" id="room-listings"></div>
+    </div>
+
+    <div class="lobby-section">
+      <div class="section-header">
+        <h3>通过房间ID进入</h3>
+      </div>
+      <div class="input-group" style="margin: 0;">
+        <label>房间ID</label>
+        <input type="text" id="main-room-id" placeholder="输入房间ID" maxlength="6">
+      </div>
+      <button class="btn btn-secondary" id="btn-quick-join">加入房间</button>
+    </div>
+
+    <div id="status-msg"></div>
   </div>
 </div>
 
@@ -480,6 +632,7 @@ body {
 <div class="modal-overlay" id="modal-create">
   <div class="modal-card">
     <h2>创建房间</h2>
+    <div class="room-note">房主：<span id="host-name-display">-</span></div>
     <div id="room-id-display">房间ID: <span id="my-room-id">...</span></div>
     <div id="player-list">
       <h3>玩家列表</h3>
@@ -494,24 +647,6 @@ body {
     </div>
     <button class="btn btn-primary" id="btn-start" disabled>等待玩家加入...</button>
     <button class="btn btn-secondary" id="btn-back">返回</button>
-  </div>
-</div>
-
-<!-- Join Room Modal -->
-<div class="modal-overlay" id="modal-join">
-  <div class="modal-card">
-    <h2>加入房间</h2>
-    <div class="input-group">
-      <label>房间ID</label>
-      <input type="text" id="join-room-id" placeholder="输入房间ID" maxlength="6">
-    </div>
-    <div class="input-group">
-      <label>你的昵称</label>
-      <input type="text" id="player-name" placeholder="输入昵称" maxlength="12">
-    </div>
-    <button class="btn btn-primary" id="btn-connect">连接</button>
-    <button class="btn btn-secondary" id="btn-cancel-join">返回</button>
-    <div id="status-msg"></div>
   </div>
 </div>
 
@@ -644,6 +779,19 @@ const WEAPONS = {
 const PLAYER_COLORS = [0x00c6ff, 0xff512f, 0x00ff88, 0xffaa00];
 const PLAYER_NAMES = ['蓝色坦克', '红色坦克', '绿色坦克', '橙色坦克'];
 const SPAWN_POSITIONS = [[-30,0,0], [30,0,0], [0,0,-30], [0,0,30]];
+const MAX_PLAYERS = 4;
+const DISCOVERY_PEERS_URL = '/api/rooms/list';
+const KEYBIND_STORAGE_KEY = 'tank-keybinds-v1';
+const DEFAULT_ONLINE_BINDINGS = {
+  forward: 'KeyW',
+  backward: 'KeyS',
+  left: 'KeyA',
+  right: 'KeyD',
+  fire: 'Space',
+  weaponSwitch: 'KeyQ',
+  mine: 'KeyE',
+  scope: 'KeyZ'
+};
 
 // ============== GAME STATE ==============
 let scene, renderer, camera;
@@ -663,7 +811,55 @@ let hostConnection = null;
 let isHost = false;
 let localPlayerIndex = -1;
 let gameStarted = false;
-let lobbyState = { players: [] };
+let lobbyState = { players: [], hostName: '', roomName: '', roomId: '' };
+let defaultPlayerName = '';
+let runtimeConfig = { stunServers: [], turnServers: [] };
+let runtimeConfigPromise = null;
+let onlineBindings = { ...DEFAULT_ONLINE_BINDINGS };
+
+function getReadableKeyName(code) {
+  const keyMap = {
+    Space: '空格', KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D', KeyQ: 'Q', KeyE: 'E', KeyZ: 'Z', KeyC: 'C',
+    ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Enter: '回车', Quote: '', Backslash: '\\', BracketRight: ']'
+  };
+  return keyMap[code] || code.replace(/^Key/, '');
+}
+
+function loadOnlineBindings() {
+  try {
+    const raw = localStorage.getItem(KEYBIND_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_ONLINE_BINDINGS };
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_ONLINE_BINDINGS, ...(parsed.online || {}) };
+  } catch (error) {
+    return { ...DEFAULT_ONLINE_BINDINGS };
+  }
+}
+
+function isBoundDown(action) {
+  const code = onlineBindings[action];
+  return !!(code && keys[code]);
+}
+
+function isBoundJustPressed(action) {
+  const code = onlineBindings[action];
+  return !!(code && keys[code] && !prevKeys[code]);
+}
+
+function updateOnlineControlHint() {
+  const hint = document.querySelector('.controls-hint');
+  if (!hint) return;
+  hint.innerHTML = `
+    <kbd>${getReadableKeyName(onlineBindings.forward)}</kbd>
+    <kbd>${getReadableKeyName(onlineBindings.left)}</kbd>
+    <kbd>${getReadableKeyName(onlineBindings.backward)}</kbd>
+    <kbd>${getReadableKeyName(onlineBindings.right)}</kbd> 移动 
+    <kbd>${getReadableKeyName(onlineBindings.fire)}</kbd> 射击 
+    <kbd>${getReadableKeyName(onlineBindings.weaponSwitch)}</kbd> 切换武器 
+    <kbd>${getReadableKeyName(onlineBindings.mine)}</kbd> 放置地雷 
+    <kbd>${getReadableKeyName(onlineBindings.scope)}</kbd> 瞄准镜
+  `;
+}
 
 let keys = {};
 let prevKeys = {};
@@ -688,6 +884,210 @@ let minimapCanvas, minimapCtx;
 let isMobileTouch = false;
 let mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false };
 let prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false };
+let roomHeartbeatTimer = 0;
+let roomListRefreshTimer = 0;
+let roomListSnapshot = new Map();
+
+function generateDefaultPlayerName() {
+  return `玩家${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+function formatRoomName(hostName) {
+  return `${hostName}的房间`;
+}
+
+function normalizeRoomId(value) {
+  return (value || '').trim().toUpperCase().slice(0, 6);
+}
+
+function ensureMainPlayerName() {
+  const input = document.getElementById('main-player-name');
+  if (!input) return generateDefaultPlayerName();
+  let name = input.value.trim();
+  if (!name) {
+    defaultPlayerName = defaultPlayerName || generateDefaultPlayerName();
+    name = defaultPlayerName;
+    input.value = name;
+  }
+  return name.slice(0, 12);
+}
+
+function getPeerOptions() {
+  const iceServers = Array.isArray(runtimeConfig.stunServers) && runtimeConfig.stunServers.length
+    ? [...runtimeConfig.stunServers]
+    : [{ urls: 'stun:stun.l.google.com:19302' }];
+  if (Array.isArray(runtimeConfig.turnServers) && runtimeConfig.turnServers.length) {
+    iceServers.push(...runtimeConfig.turnServers);
+  }
+  return { config: { iceServers } };
+}
+
+async function loadRuntimeConfig() {
+  try {
+    const response = await fetch('/api/config', { cache: 'no-store' });
+    if (!response.ok) return;
+    const data = await response.json();
+    runtimeConfig.stunServers = Array.isArray(data.stunServers) ? data.stunServers : [];
+    runtimeConfig.turnServers = Array.isArray(data.turnServers) ? data.turnServers : [];
+  } catch (error) {
+    console.warn('Runtime config unavailable:', error);
+  }
+}
+
+async function upsertRoomRegistry() {
+  if (!isHost || gameStarted || !peer || !peer.id) return;
+  try {
+    await fetch('/api/rooms/upsert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        roomId: peer.id,
+        hostName: lobbyState.hostName,
+        roomName: lobbyState.roomName,
+        playerCount: lobbyState.players.length,
+        maxPlayers: MAX_PLAYERS
+      })
+    });
+  } catch (error) {
+    console.warn('Room registry upsert failed:', error);
+  }
+}
+
+function startRoomHeartbeat() {
+  clearInterval(roomHeartbeatTimer);
+  roomHeartbeatTimer = window.setInterval(() => {
+    upsertRoomRegistry();
+  }, 4000);
+}
+
+function stopRoomHeartbeat() {
+  if (roomHeartbeatTimer) {
+    clearInterval(roomHeartbeatTimer);
+    roomHeartbeatTimer = 0;
+  }
+}
+
+function startRoomListPolling() {
+  stopRoomListPolling();
+  roomListRefreshTimer = window.setInterval(() => {
+    if (!gameStarted && !document.getElementById('modal-create').classList.contains('show')) {
+      refreshRoomList();
+    }
+  }, 3000);
+}
+
+function stopRoomListPolling() {
+  if (roomListRefreshTimer) {
+    clearInterval(roomListRefreshTimer);
+    roomListRefreshTimer = 0;
+  }
+}
+
+async function unregisterRoomRegistry(roomId = lobbyState.roomId) {
+  stopRoomHeartbeat();
+  if (!roomId) return;
+  try {
+    await fetch('/api/rooms/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roomId })
+    });
+  } catch (error) {
+    console.warn('Room registry delete failed:', error);
+  }
+}
+
+function renderRoomList(rooms) {
+  const container = document.getElementById('room-listings');
+  const note = document.getElementById('room-list-note');
+  container.innerHTML = '';
+
+  if (!rooms.length) {
+    roomListSnapshot = new Map();
+    note.textContent = DISCOVERY_PEERS_URL ? '当前没有可加入的房间。' : '当前部署未启用房间列表，请通过房间ID加入。';
+    return;
+  }
+
+  const nextSnapshot = new Map();
+  let changedCount = 0;
+
+  for (const room of rooms) {
+    nextSnapshot.set(room.roomId, room.playerCount);
+    const previousCount = roomListSnapshot.get(room.roomId);
+    const delta = typeof previousCount === 'number' ? room.playerCount - previousCount : 0;
+    const isFull = room.playerCount >= room.maxPlayers;
+    const isBusy = !isFull && room.playerCount >= Math.max(2, room.maxPlayers - 1);
+    const statusClass = isFull ? 'full' : (isBusy ? 'busy' : 'waiting');
+    const statusText = isFull ? '已满员' : (isBusy ? '即将满员' : '等待加入');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'room-item';
+    button.disabled = isFull;
+    if (delta !== 0) {
+      button.classList.add('count-changed');
+      changedCount += 1;
+    }
+    button.innerHTML = `
+      <span class="room-main">
+        <span class="room-title">${room.roomName}</span>
+        <span class="room-meta">
+          <span class="room-subtitle">${room.playerCount}/${room.maxPlayers} 人 · 房主：${room.hostName}</span>
+          <span class="room-status-chip ${statusClass}">${statusText}</span>
+          ${delta === 0 ? '' : `<span class="room-change">${delta > 0 ? `+${delta}` : `${delta}`} 人</span>`}
+        </span>
+      </span>
+      <span class="room-id-chip">${room.roomId}</span>
+    `;
+    if (!isFull) button.addEventListener('click', () => joinRoomById(room.roomId));
+    container.appendChild(button);
+  }
+
+  roomListSnapshot = nextSnapshot;
+  note.textContent = changedCount > 0
+    ? `大厅已刷新，${changedCount} 个房间人数刚刚变化`
+    : `找到 ${rooms.length} 个房间 · 实时同步中`;
+}
+
+async function refreshRoomList() {
+  const container = document.getElementById('room-listings');
+  const note = document.getElementById('room-list-note');
+  container.innerHTML = '';
+
+  if (!DISCOVERY_PEERS_URL) {
+    note.textContent = '当前部署未启用房间列表，请通过房间ID加入。';
+    return;
+  }
+
+  note.textContent = '正在刷新房间列表...';
+  try {
+    const response = await fetch(DISCOVERY_PEERS_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const rooms = await response.json();
+    renderRoomList(Array.isArray(rooms) ? rooms.filter((room) => room && room.roomId) : []);
+  } catch (error) {
+    console.warn('Room list fetch failed:', error);
+    note.textContent = '房间列表暂时不可用，请通过房间ID加入。';
+  }
+}
+
+function showPageBack(visible) {
+  const back = document.getElementById('page-back');
+  if (back) back.classList.toggle('hidden', !visible);
+}
+
+function resetLobbyState() {
+  connections = [];
+  hostConnection = null;
+  isHost = false;
+  localPlayerIndex = -1;
+  lobbyState = { players: [], hostName: '', roomName: '', roomId: '' };
+  roomListSnapshot = new Map();
+  document.getElementById('players-container').innerHTML = '';
+  document.getElementById('my-room-id').textContent = '...';
+  document.getElementById('host-name-display').textContent = '-';
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('btn-start').textContent = '等待玩家加入...';
+}
 
 // ============== THREE.JS SETUP ==============
 function initThree() {
@@ -999,6 +1399,7 @@ function createTankMesh(color) {
   hpBarFill.scale.set(2.84, 0.22, 1);
   hpBarAnchor.add(hpBarBg, hpBarFill);
   group.userData.hpBarFill = hpBarFill;
+  group.userData.hpBarAnchor = hpBarAnchor;
   group.add(hpBarAnchor);
 
   return { group, muzzle };
@@ -1008,7 +1409,9 @@ function updateTankHpBar(player) {
   if (!player || !player.mesh || !player.mesh.userData.hpBarFill) return;
   const ratio = Math.max(0, Math.min(1, player.hp / 100));
   player.mesh.userData.hpBarFill.scale.x = 2.84 * ratio;
-  player.mesh.userData.hpBarFill.visible = player.alive && player.hp > 0 && player.index !== localPlayerIndex;
+  const showBar = player.alive && player.hp > 0 && player.index !== localPlayerIndex;
+  if (player.mesh.userData.hpBarAnchor) player.mesh.userData.hpBarAnchor.visible = showBar;
+  player.mesh.userData.hpBarFill.visible = showBar;
 }
 
 function darkenColor(hex, factor) {
@@ -1700,10 +2103,10 @@ function updateSatellitePlayers(dt) {
       const targetSpeed = SATELLITE_TARGET_SPEED * dt;
       let up = false, down = false, left = false, right = false;
     if (player.index === localPlayerIndex) {
-      up = !!(keys['KeyW'] || keys['ArrowUp'] || mobileInput.forward || mobileInput.satUp);
-      down = !!(keys['KeyS'] || keys['ArrowDown'] || mobileInput.backward || mobileInput.satDown);
-      left = !!(keys['KeyA'] || keys['ArrowLeft'] || mobileInput.left || mobileInput.satLeft);
-      right = !!(keys['KeyD'] || keys['ArrowRight'] || mobileInput.right || mobileInput.satRight);
+      up = !!(isBoundDown('forward') || mobileInput.forward || mobileInput.satUp);
+      down = !!(isBoundDown('backward') || mobileInput.backward || mobileInput.satDown);
+      left = !!(isBoundDown('left') || mobileInput.left || mobileInput.satLeft);
+      right = !!(isBoundDown('right') || mobileInput.right || mobileInput.satRight);
     } else {
       const input = player.input || {};
       up = !!(input.f || input.su);
@@ -2143,7 +2546,7 @@ function drawSatelliteOverlay(player) {
 
   satelliteCtx.fillStyle = 'rgba(255,255,255,0.92)';
   satelliteCtx.font = 'bold 18px Segoe UI';
-  satelliteCtx.fillText(player.satelliteFiring ? '卫星激光发射中...' : '卫星瞄准：WASD移动，按 C 或 Space 发射', 24, 36);
+  satelliteCtx.fillText(player.satelliteFiring ? '卫星激光发射中...' : `卫星瞄准：${getReadableKeyName(onlineBindings.forward)}/${getReadableKeyName(onlineBindings.left)}/${getReadableKeyName(onlineBindings.backward)}/${getReadableKeyName(onlineBindings.right)}移动，按 ${getReadableKeyName(onlineBindings.fire)} 发射`, 24, 36);
   satelliteCtx.font = '14px Segoe UI';
   satelliteCtx.fillText('打击半径：' + SATELLITE_RADIUS.toFixed(0) + 'm（与本地版一致）', 24, 60);
 }
@@ -2259,24 +2662,20 @@ function updateHUD() {
 }
 
 // ============== NETWORKING ==============
-function initPeer() {
+async function initPeer() {
+  if (runtimeConfigPromise) await runtimeConfigPromise;
   const roomId = generateRoomId();
-  
-  const turnConfig = {
-    config: {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        // Add your TURN server here:
-        // { urls: 'turn:your-turn-server.com:3478', username: 'user', credential: 'pass' }
-      ]
-    }
-  };
 
-  peer = new Peer(roomId, turnConfig);
+  peer = new Peer(roomId, getPeerOptions());
 
   peer.on('open', (id) => {
     console.log('My peer ID:', id);
+    lobbyState.roomId = id;
+    lobbyState.roomName = lobbyState.roomName || formatRoomName(lobbyState.hostName || ensureMainPlayerName());
     document.getElementById('my-room-id').textContent = id;
+    document.getElementById('host-name-display').textContent = lobbyState.hostName || '-';
+    upsertRoomRegistry();
+    startRoomHeartbeat();
   });
 
   peer.on('connection', (conn) => {
@@ -2293,10 +2692,10 @@ function initPeer() {
 function handleConnection(conn) {
   conn.on('open', () => {
     console.log('Connection opened with:', conn.peer);
-    
+
     if (isHost) {
-      // Add player to lobby
-      conn.send({ t: 'lobby', players: lobbyState.players });
+      if (conn.metadata && conn.metadata.probe) return;
+      conn.send({ t: 'lobby', players: lobbyState.players, hostName: lobbyState.hostName, roomName: lobbyState.roomName, roomId: lobbyState.roomId });
       connections.push(conn);
     } else {
       hostConnection = conn;
@@ -2312,6 +2711,15 @@ function handleConnection(conn) {
     if (isHost) {
       const idx = connections.indexOf(conn);
       if (idx >= 0) connections.splice(idx, 1);
+      if (Number.isInteger(conn.playerIndex)) {
+        lobbyState.players.splice(conn.playerIndex, 1);
+        lobbyState.players.forEach((player, index) => { player.index = index; });
+        connections.forEach((item) => {
+          if (Number.isInteger(item.playerIndex) && item.playerIndex > conn.playerIndex) item.playerIndex -= 1;
+        });
+        updateLobbyUI();
+        broadcastLobby();
+      }
     }
   });
 }
@@ -2320,16 +2728,22 @@ function handleMessage(data, conn) {
   switch (data.t) {
     case 'join':
       if (isHost) {
+        if (gameStarted) {
+          conn.send({ t: 'started' });
+          conn.close();
+          return;
+        }
         const playerIndex = lobbyState.players.length;
-        if (playerIndex >= 4) {
+        if (playerIndex >= MAX_PLAYERS) {
           conn.send({ t: 'full' });
           conn.close();
           return;
         }
-        const player = { index: playerIndex, name: data.name, ready: false };
+        const player = { index: playerIndex, name: (data.name || generateDefaultPlayerName()).trim().slice(0, 12), ready: false };
         lobbyState.players.push(player);
+        conn.playerIndex = playerIndex;
         updateLobbyUI();
-        conn.send({ t: 'joined', index: playerIndex, players: lobbyState.players });
+        conn.send({ t: 'joined', index: playerIndex, players: lobbyState.players, hostName: lobbyState.hostName, roomName: lobbyState.roomName, roomId: lobbyState.roomId });
         broadcastLobby();
       }
       break;
@@ -2353,16 +2767,44 @@ function handleMessage(data, conn) {
       break;
 
     case 'lobby':
-      // Client received lobby state
       lobbyState.players = data.players;
+      lobbyState.hostName = data.hostName || lobbyState.hostName;
+      lobbyState.roomName = data.roomName || lobbyState.roomName;
+      lobbyState.roomId = data.roomId || lobbyState.roomId;
+      showLobbySection('lobby-create');
       updateLobbyUI();
       break;
 
     case 'joined':
-      // Client joined successfully
       localPlayerIndex = data.index;
       lobbyState.players = data.players;
+      lobbyState.hostName = data.hostName || lobbyState.hostName;
+      lobbyState.roomName = data.roomName || lobbyState.roomName;
+      lobbyState.roomId = data.roomId || lobbyState.roomId;
+      showLobbySection('lobby-create');
       updateLobbyUI();
+      break;
+
+    case 'roomInfoQuery':
+      if (isHost && !gameStarted) {
+        const hostName = lobbyState.hostName || (lobbyState.players[0] && lobbyState.players[0].name) || '玩家0000';
+        conn.send({
+          t: 'roomInfo',
+          roomId: lobbyState.roomId || (peer && peer.id) || '',
+          hostName,
+          roomName: lobbyState.roomName || formatRoomName(hostName),
+          playerCount: lobbyState.players.length,
+          maxPlayers: MAX_PLAYERS
+        });
+      }
+      break;
+
+    case 'full':
+      showStatus('房间已满', 'error');
+      break;
+
+    case 'started':
+      showStatus('游戏已开始，无法加入', 'error');
       break;
 
     case 'state':
@@ -2410,7 +2852,8 @@ function broadcast(msg) {
 }
 
 function broadcastLobby() {
-  broadcast({ t: 'lobby', players: lobbyState.players });
+  if (isHost) upsertRoomRegistry();
+  broadcast({ t: 'lobby', players: lobbyState.players, hostName: lobbyState.hostName, roomName: lobbyState.roomName, roomId: lobbyState.roomId });
 }
 
 function sendToHost(msg) {
@@ -2465,20 +2908,20 @@ function applyRemoteState(state) {
 
 function buildClientInput() {
   return {
-    f: !!(keys['KeyW'] || keys['ArrowUp'] || mobileInput.forward),
-    b: !!(keys['KeyS'] || keys['ArrowDown'] || mobileInput.backward),
-    l: !!(keys['KeyA'] || keys['ArrowLeft'] || mobileInput.left),
-    r: !!(keys['KeyD'] || keys['ArrowRight'] || mobileInput.right),
+    f: !!(isBoundDown('forward') || mobileInput.forward),
+    b: !!(isBoundDown('backward') || mobileInput.backward),
+    l: !!(isBoundDown('left') || mobileInput.left),
+    r: !!(isBoundDown('right') || mobileInput.right),
     boost: !!mobileInput.boost,
-    fire: !!(keys['Space'] || mobileInput.fire),
-    mine: !!((keys['KeyE'] && !prevKeys['KeyE']) || (mobileInput.mine && !prevMobileInput.mine)),
-    sat: !!(keys['KeyC'] && !prevKeys['KeyC']),
+    fire: !!(isBoundDown('fire') || mobileInput.fire),
+    mine: !!(isBoundJustPressed('mine') || (mobileInput.mine && !prevMobileInput.mine)),
+    sat: false,
     su: !!mobileInput.satUp,
     sd: !!mobileInput.satDown,
     sl: !!mobileInput.satLeft,
     sr: !!mobileInput.satRight,
-    scopeToggle: !!((keys['KeyZ'] && !prevKeys['KeyZ']) || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle)),
-    weaponToggle: !!((keys['KeyQ'] && !prevKeys['KeyQ']) || (mobileInput.weaponToggle && !prevMobileInput.weaponToggle))
+    scopeToggle: !!(isBoundJustPressed('scope') || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle)),
+    weaponToggle: !!(isBoundJustPressed('weaponSwitch') || (mobileInput.weaponToggle && !prevMobileInput.weaponToggle))
   };
 }
 
@@ -2551,16 +2994,16 @@ function gameLoop() {
     const localPlayer = players[localPlayerIndex];
     if (localPlayer && localPlayer.alive) {
       const controls = {
-        forward: keys['KeyW'] || keys['ArrowUp'] || mobileInput.forward,
-        backward: keys['KeyS'] || keys['ArrowDown'] || mobileInput.backward,
-        left: keys['KeyA'] || keys['ArrowLeft'] || mobileInput.left,
-        right: keys['KeyD'] || keys['ArrowRight'] || mobileInput.right,
+        forward: isBoundDown('forward') || mobileInput.forward,
+        backward: isBoundDown('backward') || mobileInput.backward,
+        left: isBoundDown('left') || mobileInput.left,
+        right: isBoundDown('right') || mobileInput.right,
         boost: mobileInput.boost || false
       };
       movePlayer(localPlayer, controls, dt);
 
-      const firePressed = !!(keys['Space'] || mobileInput.fire);
-      const firePrev = !!(prevKeys['Space'] || prevMobileInput.fire);
+      const firePressed = !!(isBoundDown('fire') || mobileInput.fire);
+      const firePrev = !!((onlineBindings.fire && prevKeys[onlineBindings.fire]) || prevMobileInput.fire);
       if (localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
         if (firePressed && !firePrev) {
           fireSatelliteLaser(localPlayer);
@@ -2568,49 +3011,30 @@ function gameLoop() {
       } else if (firePressed) {
         fire(localPlayer);
       }
-      const minePressed = !!((keys['KeyE'] && !prevKeys['KeyE']) || (mobileInput.mine && !prevMobileInput.mine));
+      const minePressed = !!(isBoundJustPressed('mine') || (mobileInput.mine && !prevMobileInput.mine));
       if (minePressed) {
         createMine(localPlayer);
       }
-      if (keys['KeyC'] && !prevKeys['KeyC']) {
-        if (localPlayer.hasSatellite) {
-          localPlayer.hasSatellite = false;
-          localPlayer.usingSatellite = true;
-          localPlayer.satelliteFiring = false;
-          localPlayer.satelliteEndTime = 0;
-          localPlayer.scoping = false;
-          scoping = false;
-          if (localPlayer.mesh) {
-            localPlayer.satelliteTarget.x = localPlayer.mesh.position.x;
-            localPlayer.satelliteTarget.z = localPlayer.mesh.position.z;
-          }
-        } else if (localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
-          fireSatelliteLaser(localPlayer);
-        }
-      }
-      const scopePressed = !!((keys['KeyZ'] && !prevKeys['KeyZ']) || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle));
+      const scopePressed = !!(isBoundJustPressed('scope') || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle));
       if (scopePressed) {
         localPlayer.scoping = !localPlayer.scoping;
         scoping = localPlayer.scoping;
       }
-      const weaponPressed = !!((keys['KeyQ'] && !prevKeys['KeyQ']) || (mobileInput.weaponToggle && !prevMobileInput.weaponToggle));
+      const weaponPressed = !!(isBoundJustPressed('weaponSwitch') || (mobileInput.weaponToggle && !prevMobileInput.weaponToggle));
       if (weaponPressed) {
         toggleWeapon(localPlayer);
       }
 
       // Boost detection
       const now = performance.now();
-      const tapKey = keys['KeyW'] ? 'KeyW' : (keys['ArrowUp'] ? 'ArrowUp' : null);
-      if (tapKey && !prevKeys[tapKey]) {
+      const tapKey = onlineBindings.forward;
+      if (tapKey && keys[tapKey] && !prevKeys[tapKey]) {
         if (now - localPlayer.lastTapTime < DOUBLE_TAP_MS && localPlayer.lastTapKey === tapKey && localPlayer.stamina >= BOOST_STAMINA_MIN_START) {
           localPlayer.boosting = true;
           localPlayer.boostEndTime = now + BOOST_DURATION;
         }
         localPlayer.lastTapKey = tapKey;
         localPlayer.lastTapTime = now;
-      }
-      if (now > localPlayer.boostEndTime) {
-        localPlayer.boosting = false;
       }
     }
 
@@ -2654,13 +3078,13 @@ function gameLoop() {
   } else {
     const localPlayer = players[localPlayerIndex];
     if (localPlayer && localPlayer.alive) {
-      const scopePressed = !!((keys['KeyZ'] && !prevKeys['KeyZ']) || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle));
+      const scopePressed = !!(isBoundJustPressed('scope') || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle));
       if (scopePressed && !localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
         localPlayer.scoping = !localPlayer.scoping;
         scoping = localPlayer.scoping;
       }
 
-      const weaponPressed = !!((keys['KeyQ'] && !prevKeys['KeyQ']) || (mobileInput.weaponToggle && !prevMobileInput.weaponToggle));
+      const weaponPressed = !!(isBoundJustPressed('weaponSwitch') || (mobileInput.weaponToggle && !prevMobileInput.weaponToggle));
       if (weaponPressed && !localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
         toggleWeapon(localPlayer);
       }
@@ -2706,14 +3130,12 @@ function gameLoop() {
 
 // ============== LOBBY ==============
 function showLobbySection(id) {
-  // Hide all modals first
   document.getElementById('modal-create').classList.remove('show');
-  document.getElementById('modal-join').classList.remove('show');
-  
   if (id === 'lobby-create') {
     document.getElementById('modal-create').classList.add('show');
-  } else if (id === 'lobby-join') {
-    document.getElementById('modal-join').classList.add('show');
+  } else {
+    startRoomListPolling();
+    refreshRoomList();
   }
 }
 
@@ -2730,6 +3152,8 @@ function generateRoomId() {
 function updateLobbyUI() {
   const container = document.getElementById('players-container');
   container.innerHTML = '';
+  document.getElementById('host-name-display').textContent = lobbyState.hostName || '-';
+  document.getElementById('my-room-id').textContent = lobbyState.roomId || '...';
   
   for (const p of lobbyState.players) {
     const div = document.createElement('div');
@@ -2744,23 +3168,75 @@ function updateLobbyUI() {
 
   const startBtn = document.getElementById('btn-start');
   if (isHost && lobbyState.players.length >= 1) {
+    startBtn.style.display = 'block';
     startBtn.disabled = false;
     startBtn.textContent = '开始游戏';
   } else if (isHost) {
+    startBtn.style.display = 'block';
     startBtn.disabled = true;
     startBtn.textContent = '等待玩家加入...';
+  } else {
+    startBtn.style.display = 'none';
   }
 }
 
 function showStatus(msg, type) {
   const el = document.getElementById('status-msg');
+  if (!msg) {
+    el.textContent = '';
+    el.className = '';
+    el.style.display = 'none';
+    return;
+  }
   el.textContent = msg;
   el.className = type;
   el.style.display = 'block';
 }
 
+async function joinRoomById(roomId) {
+  const normalizedRoomId = normalizeRoomId(roomId || document.getElementById('main-room-id').value);
+  if (!normalizedRoomId) {
+    showStatus('请输入6位房间ID', 'error');
+    return;
+  }
+
+  const playerName = ensureMainPlayerName();
+  document.getElementById('main-room-id').value = normalizedRoomId;
+  showStatus('连接中...', 'info');
+
+  if (peer) {
+    peer.destroy();
+    peer = null;
+  }
+
+  isHost = false;
+  stopRoomHeartbeat();
+  if (runtimeConfigPromise) await runtimeConfigPromise;
+  peer = new Peer(getPeerOptions());
+
+  peer.on('open', () => {
+    const conn = peer.connect(normalizedRoomId);
+    handleConnection(conn);
+    conn.on('open', () => {
+      hostConnection = conn;
+      conn.send({ t: 'join', name: playerName });
+      showStatus('连接成功，等待房主开始...', 'success');
+    });
+    conn.on('error', (err) => {
+      showStatus('连接失败: ' + err.type, 'error');
+    });
+  });
+
+  peer.on('error', (err) => {
+    showStatus('连接错误: ' + err.type, 'error');
+  });
+}
+
 // ============== START GAME ==============
 function startGame(startCfg = null) {
+  showPageBack(false);
+  stopRoomListPolling();
+  if (isHost) unregisterRoomRegistry(lobbyState.roomId);
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = 0;
@@ -2825,7 +3301,6 @@ function startGame(startCfg = null) {
   // Hide lobby, show game
   document.getElementById('lobby').classList.add('hidden');
   document.getElementById('modal-create').classList.remove('show');
-  document.getElementById('modal-join').classList.remove('show');
   document.getElementById('canvas-container').classList.add('active');
   document.getElementById('ui').classList.add('active');
   document.getElementById('winner-overlay').classList.remove('show');
@@ -2837,69 +3312,39 @@ function startGame(startCfg = null) {
 
 // ============== EVENT LISTENERS ==============
 document.getElementById('btn-create').addEventListener('click', () => {
+  showStatus('', 'info');
+  const hostName = ensureMainPlayerName();
+  if (peer) {
+    peer.destroy();
+    peer = null;
+  }
   isHost = true;
-  lobbyState.players = [{ index: 0, name: '房主', ready: true }];
+  lobbyState.hostName = hostName;
+  lobbyState.roomName = formatRoomName(hostName);
+  lobbyState.players = [{ index: 0, name: hostName, ready: true }];
   localPlayerIndex = 0;
+  document.getElementById('host-name-display').textContent = hostName;
   initPeer();
   showLobbySection('lobby-create');
   updateLobbyUI();
 });
 
-document.getElementById('btn-join').addEventListener('click', () => {
-  showLobbySection('lobby-join');
+document.getElementById('btn-refresh-rooms').addEventListener('click', () => {
+  refreshRoomList();
 });
 
-document.getElementById('btn-connect').addEventListener('click', () => {
-  const roomId = document.getElementById('join-room-id').value.trim();
-  const name = document.getElementById('player-name').value.trim() || '玩家';
-  
-  if (!roomId) {
-    showStatus('请输入房间ID', 'error');
-    return;
-  }
-
-  showStatus('连接中...', 'info');
-  peer = new Peer();
-  
-  peer.on('open', () => {
-    const conn = peer.connect(roomId);
-    conn.on('open', () => {
-      isHost = false;
-      hostConnection = conn;
-      conn.send({ t: 'join', name: name });
-      showStatus('连接成功!', 'success');
-    });
-    
-    conn.on('data', (data) => handleMessage(data, conn));
-    
-    conn.on('error', (err) => {
-      showStatus('连接失败: ' + err.type, 'error');
-    });
-  });
-
-  peer.on('error', (err) => {
-    showStatus('连接错误: ' + err.type, 'error');
-  });
+document.getElementById('btn-quick-join').addEventListener('click', () => {
+  joinRoomById(document.getElementById('main-room-id').value);
 });
 
 document.getElementById('btn-back').addEventListener('click', () => {
+  unregisterRoomRegistry(lobbyState.roomId);
   if (peer) {
     peer.destroy();
     peer = null;
   }
-  connections = [];
-  hostConnection = null;
-  isHost = false;
-  localPlayerIndex = -1;
-  lobbyState = { players: [] };
-  document.getElementById('players-container').innerHTML = '';
-  document.getElementById('my-room-id').textContent = '...';
-  document.getElementById('btn-start').disabled = true;
-  document.getElementById('btn-start').textContent = '等待玩家加入...';
-  showLobbySection('lobby-main');
-});
-
-document.getElementById('btn-cancel-join').addEventListener('click', () => {
+  resetLobbyState();
+  showPageBack(true);
   showLobbySection('lobby-main');
 });
 
@@ -2937,9 +3382,21 @@ document.getElementById('btn-restart').addEventListener('click', () => {
   }
 });
 
+window.addEventListener('beforeunload', () => {
+  if (isHost && lobbyState.roomId && !gameStarted) {
+    navigator.sendBeacon('/api/rooms/delete', JSON.stringify({ roomId: lobbyState.roomId }));
+  }
+});
+
+window.addEventListener('pagehide', () => {
+  if (isHost && lobbyState.roomId && !gameStarted) {
+    navigator.sendBeacon('/api/rooms/delete', JSON.stringify({ roomId: lobbyState.roomId }));
+  }
+});
+
 document.addEventListener('keydown', (e) => {
   keys[e.code] = true;
-  if (['Space', 'KeyZ', 'KeyQ', 'KeyE', 'KeyC'].includes(e.code)) {
+  if ([onlineBindings.fire, onlineBindings.scope, onlineBindings.weaponSwitch, onlineBindings.mine].includes(e.code)) {
     e.preventDefault();
   }
   sendImmediateClientInput();
@@ -2952,6 +3409,15 @@ document.addEventListener('keyup', (e) => {
 });
 
 // ============== INIT ==============
+defaultPlayerName = generateDefaultPlayerName();
+document.getElementById('main-player-name').value = defaultPlayerName;
+onlineBindings = loadOnlineBindings();
+updateOnlineControlHint();
+showPageBack(true);
+showStatus('', 'info');
+runtimeConfigPromise = loadRuntimeConfig();
+startRoomListPolling();
+refreshRoomList();
 initThree();
 </script>
 </body>
