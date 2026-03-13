@@ -419,7 +419,69 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
+}
+.winner-subtitle {
+  color: rgba(255,255,255,0.82);
+  margin-bottom: 18px;
+  font-size: 15px;
+  text-align: center;
+}
+.rematch-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+  margin: 8px 0 22px;
+  max-width: 760px;
+}
+.rematch-card {
+  width: 128px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 10px 12px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.rematch-card.ready {
+  background: rgba(255, 209, 102, 0.14);
+  border-color: rgba(255, 209, 102, 0.65);
+  box-shadow: 0 0 0 1px rgba(255, 209, 102, 0.18), 0 12px 24px rgba(255, 209, 102, 0.16);
+  transform: translateY(-2px);
+}
+.rematch-avatar {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 10px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  box-shadow: inset 0 0 0 3px rgba(255,255,255,0.14);
+  word-break: break-all;
+}
+.rematch-name {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+.rematch-state {
+  color: rgba(255,255,255,0.74);
+  font-size: 12px;
+  font-weight: 700;
+}
+.rematch-card.ready .rematch-state {
+  color: #ffe8a2;
 }
 .winner-overlay button {
   padding: 15px 40px;
@@ -723,6 +785,8 @@ body {
 
 <div class="winner-overlay" id="winner-overlay">
   <h1 id="winner-text">蓝色坦克 获胜!</h1>
+  <div class="winner-subtitle" id="winner-subtitle">等待所有玩家确认再来一局</div>
+  <div class="rematch-grid" id="rematch-grid"></div>
   <button class="btn btn-primary" id="btn-restart">再来一局</button>
 </div>
 
@@ -816,6 +880,9 @@ let defaultPlayerName = '';
 let runtimeConfig = { stunServers: [], turnServers: [] };
 let runtimeConfigPromise = null;
 let onlineBindings = { ...DEFAULT_ONLINE_BINDINGS };
+let roundEnded = false;
+let currentWinnerIndex = -1;
+let rematchVotes = {};
 
 function getReadableKeyName(code) {
   const keyMap = {
@@ -1701,6 +1768,7 @@ function applyDamage(player, dmg) {
 }
 
 function checkWinner() {
+  if (roundEnded) return;
   const alivePlayers = players.filter(p => p.alive);
   if (alivePlayers.length <= 1 && isHost) {
     const winner = alivePlayers[0];
@@ -1714,8 +1782,83 @@ function checkWinner() {
   }
 }
 
+function getRematchPlayerList() {
+  return (lobbyState.players || []).map((player, index) => ({
+    index,
+    name: player.name || PLAYER_NAMES[index] || `玩家${index + 1}`,
+    color: '#' + PLAYER_COLORS[index].toString(16).padStart(6, '0')
+  }));
+}
+
+function normalizeRematchVotes() {
+  const nextVotes = {};
+  for (const player of getRematchPlayerList()) {
+    nextVotes[player.index] = !!rematchVotes[player.index];
+  }
+  rematchVotes = nextVotes;
+}
+
+function renderRematchOverlay() {
+  const grid = document.getElementById('rematch-grid');
+  const subtitle = document.getElementById('winner-subtitle');
+  const button = document.getElementById('btn-restart');
+  const rematchPlayers = getRematchPlayerList();
+  normalizeRematchVotes();
+
+  grid.innerHTML = '';
+  let readyCount = 0;
+  for (const player of rematchPlayers) {
+    const ready = !!rematchVotes[player.index];
+    if (ready) readyCount += 1;
+
+    const card = document.createElement('div');
+    card.className = 'rematch-card' + (ready ? ' ready' : '');
+    card.innerHTML = `
+      <div class="rematch-avatar" style="background:${player.color}">${player.name}</div>
+      <div class="rematch-name">${player.name}${player.index === localPlayerIndex ? '（你）' : ''}</div>
+      <div class="rematch-state">${ready ? '已准备' : '未准备'}</div>
+    `;
+    grid.appendChild(card);
+  }
+
+  const localReady = !!rematchVotes[localPlayerIndex];
+  subtitle.textContent = readyCount >= rematchPlayers.length && rematchPlayers.length > 0
+    ? '所有玩家已准备，正在开始下一局...'
+    : `已准备 ${readyCount}/${rematchPlayers.length} 人`;
+  button.disabled = localReady;
+  button.textContent = localReady ? '已准备，等待其他玩家...' : '再来一局';
+}
+
+function maybeStartRematch() {
+  if (!isHost || !roundEnded) return;
+  const rematchPlayers = getRematchPlayerList();
+  if (!rematchPlayers.length) return;
+  normalizeRematchVotes();
+  const everyoneReady = rematchPlayers.every((player) => rematchVotes[player.index]);
+  if (!everyoneReady) return;
+
+  roundEnded = false;
+  currentWinnerIndex = -1;
+  rematchVotes = {};
+  const cfg = {
+    collision: document.getElementById('opt-collision').checked,
+    poison: document.getElementById('opt-poison').checked,
+    spread: document.getElementById('opt-spread').checked,
+    mines: document.getElementById('opt-mines').checked,
+    satellite: document.getElementById('opt-satellite').checked
+  };
+  startGame(cfg);
+  broadcast({ t: 'start', cfg, players: lobbyState.players });
+}
+
 function showWinner(winnerIndex) {
   gameStarted = false;
+  roundEnded = true;
+  currentWinnerIndex = winnerIndex;
+  rematchVotes = {};
+  for (const player of getRematchPlayerList()) {
+    rematchVotes[player.index] = false;
+  }
   const overlay = document.getElementById('winner-overlay');
   const text = document.getElementById('winner-text');
   if (winnerIndex >= 0) {
@@ -1724,6 +1867,7 @@ function showWinner(winnerIndex) {
     text.textContent = '平局!';
   }
   overlay.classList.add('show');
+  renderRematchOverlay();
 }
 
 function toggleWeapon(player) {
@@ -2712,11 +2856,24 @@ function handleConnection(conn) {
       const idx = connections.indexOf(conn);
       if (idx >= 0) connections.splice(idx, 1);
       if (Number.isInteger(conn.playerIndex)) {
+        const removedIndex = conn.playerIndex;
         lobbyState.players.splice(conn.playerIndex, 1);
         lobbyState.players.forEach((player, index) => { player.index = index; });
         connections.forEach((item) => {
           if (Number.isInteger(item.playerIndex) && item.playerIndex > conn.playerIndex) item.playerIndex -= 1;
         });
+        if (roundEnded) {
+          const nextVotes = {};
+          Object.keys(rematchVotes).forEach((key) => {
+            const index = Number(key);
+            if (index === removedIndex) return;
+            nextVotes[index > removedIndex ? index - 1 : index] = rematchVotes[index];
+          });
+          rematchVotes = nextVotes;
+          broadcast({ t: 'rematchState', votes: rematchVotes });
+          renderRematchOverlay();
+          maybeStartRematch();
+        }
         updateLobbyUI();
         broadcastLobby();
       }
@@ -2839,6 +2996,20 @@ function handleMessage(data, conn) {
 
     case 'win':
       showWinner(data.w);
+      break;
+
+    case 'rematchReady':
+      if (isHost && roundEnded && Number.isInteger(data.p)) {
+        rematchVotes[data.p] = true;
+        broadcast({ t: 'rematchState', votes: rematchVotes });
+        renderRematchOverlay();
+        maybeStartRematch();
+      }
+      break;
+
+    case 'rematchState':
+      rematchVotes = data.votes || {};
+      if (roundEnded) renderRematchOverlay();
       break;
   }
 }
@@ -3237,6 +3408,9 @@ function startGame(startCfg = null) {
   showPageBack(false);
   stopRoomListPolling();
   if (isHost) unregisterRoomRegistry(lobbyState.roomId);
+  roundEnded = false;
+  currentWinnerIndex = -1;
+  rematchVotes = {};
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = 0;
@@ -3363,22 +3537,14 @@ document.getElementById('btn-start').addEventListener('click', () => {
 });
 
 document.getElementById('btn-restart').addEventListener('click', () => {
-  document.getElementById('winner-overlay').classList.remove('show');
+  if (!roundEnded || rematchVotes[localPlayerIndex]) return;
+  rematchVotes[localPlayerIndex] = true;
+  renderRematchOverlay();
   if (isHost) {
-    // Reset game
-    bullets.forEach(b => { if (b.mesh) scene.remove(b.mesh); });
-    bullets = [];
-    mines.forEach(m => { if (m.mesh) scene.remove(m.mesh); });
-    mines = [];
-    const cfg = {
-      collision: document.getElementById('opt-collision').checked,
-      poison: document.getElementById('opt-poison').checked,
-      spread: document.getElementById('opt-spread').checked,
-      mines: document.getElementById('opt-mines').checked,
-      satellite: document.getElementById('opt-satellite').checked
-    };
-    startGame(cfg);
-    broadcast({ t: 'start', cfg, players: lobbyState.players });
+    broadcast({ t: 'rematchState', votes: rematchVotes });
+    maybeStartRematch();
+  } else {
+    sendToHost({ t: 'rematchReady', p: localPlayerIndex });
   }
 });
 
