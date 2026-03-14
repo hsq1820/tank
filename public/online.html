@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>联机模式</title>
+<title>BATTLE TANK</title>
 <style>
 :root {
   --font-ui: 'Microsoft YaHei', 'Segoe UI', system-ui, sans-serif;
@@ -413,6 +413,31 @@ body {
   color: var(--text-muted);
 }
 .p-info .weapon span { color: #fff; font-weight: bold; }
+.p-info .status {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  min-height: 18px;
+}
+.announcement-banner {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2500;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: rgba(9, 16, 30, 0.86);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: var(--blur-glass);
+  font-size: 14px;
+  font-weight: 700;
+  display: none;
+  white-space: nowrap;
+}
+.announcement-banner.show { display: block; }
 .minimap-container {
   position: fixed;
   bottom: 20px;
@@ -734,6 +759,7 @@ body {
       <label><input type="checkbox" id="opt-spread" checked> 子弹散布</label>
       <label><input type="checkbox" id="opt-mines" checked> 地雷系统</label>
       <label><input type="checkbox" id="opt-satellite" checked> 卫星激光</label>
+      <label><input type="checkbox" id="opt-dog"> 刀盾狗</label>
       <div class="room-note" id="options-owner-note">仅房主可修改对局选项</div>
     </div>
     <button class="btn btn-primary" id="btn-start" disabled>等待玩家加入...</button>
@@ -744,6 +770,7 @@ body {
 <div id="canvas-container"></div>
 <canvas id="scope-canvas"></canvas>
 <canvas id="satellite-canvas"></canvas>
+<div class="announcement-banner" id="announcement-banner"></div>
 
 <div id="ui">
   <div class="hud-row">
@@ -753,6 +780,7 @@ body {
       <div class="stamina-row"><span>体力</span><span class="stamina-text">100%</span></div>
       <div class="stamina-bar"><div class="stamina-fill" style="width:100%"></div></div>
       <div class="weapon">武器: <span>机枪</span></div>
+      <div class="status">状态：无</div>
     </div>
   </div>
   <div class="minimap-container">
@@ -863,6 +891,18 @@ const MAX_STAMINA = 100;
 const STAMINA_RECOVERY = 2;
 const BOOST_STAMINA_DRAIN = 24;
 const BOOST_STAMINA_MIN_START = 10;
+const DOG_MAX_HP = 200;
+const DOG_MOVE_SPEED = 16;
+const DOG_ATTACK_DAMAGE = 25;
+const DOG_ATTACK_CD = 5000;
+const DOG_ATTACK_WINDUP = 500;
+const DOG_REGEN_DELAY = 10000;
+const DOG_REGEN_RATE = 2;
+const DOG_SHIELD_BREAK_HP = 100;
+const DOG_HIT_RADIUS = 2.8;
+const DOG_ATTACK_RANGE = 4.1;
+const PLAYER_REGEN_BUFF_DELAY = 5000;
+const PLAYER_REGEN_BUFF_RATE = 1;
 
 const WEAPONS = {
   mg: { name: '机枪', dmg: 1, cd: 50, speed: 120, color: 0xff4400, size: 0.15 },
@@ -898,6 +938,9 @@ let poisonCircle;
 let satellitePickup;
 let clock;
 let recentPredictedLocalShots = [];
+let neutralDog = null;
+let enableNeutralDog = false;
+let announcementHideTimer = 0;
 
 let peer = null;
 let connections = [];
@@ -913,6 +956,12 @@ let onlineBindings = { ...DEFAULT_ONLINE_BINDINGS };
 let roundEnded = false;
 let currentWinnerIndex = -1;
 let rematchVotes = {};
+const textureLoader = new THREE.TextureLoader();
+const DOG_TEXTURES = {
+  full: textureLoader.load('/daodunDog.png'),
+  noShield: textureLoader.load('/daoDog.png'),
+  shield: textureLoader.load('/dun.png')
+};
 
 function getReadableKeyName(code) {
   const keyMap = {
@@ -1460,7 +1509,11 @@ function createPlayerState(index) {
   return {
     index: index,
     hp: 100,
+    shield: 0,
     weapon: 'mg',
+    damageMultiplier: 1,
+    regenBuff: false,
+    buffType: '',
     color: PLAYER_COLORS[index],
     name: PLAYER_NAMES[index],
     mesh: null,
@@ -1473,6 +1526,7 @@ function createPlayerState(index) {
     boosting: false,
     boostEndTime: 0,
     stamina: MAX_STAMINA,
+    lastDamagedAt: performance.now(),
     lastTapKey: '',
     lastTapTime: 0,
     lastShot: 0,
@@ -1488,6 +1542,7 @@ function createPlayerState(index) {
     satelliteHitTargets: null,
     satelliteBeam: null,
     satelliteDamageApplied: false,
+    satelliteHitDog: false,
     alive: true,
     x: 0, z: 0, rotation: 0,
     prevX: 0, prevZ: 0,
@@ -1638,6 +1693,7 @@ function clearGameWorld() {
   grassPatches = [];
   poisonCircle = null;
   satellitePickup = null;
+  clearNeutralDog();
   recentPredictedLocalShots = [];
   scoping = false;
 
@@ -1648,6 +1704,12 @@ function clearGameWorld() {
   if (satelliteCanvas && satelliteCtx) {
     satelliteCanvas.classList.remove('active');
     satelliteCtx.clearRect(0, 0, satelliteCanvas.width, satelliteCanvas.height);
+  }
+  const banner = document.getElementById('announcement-banner');
+  if (banner) banner.classList.remove('show');
+  if (announcementHideTimer) {
+    clearTimeout(announcementHideTimer);
+    announcementHideTimer = 0;
   }
 }
 
@@ -1683,7 +1745,7 @@ function buildBulletFromPlayer(player, now = performance.now()) {
     z: muzzlePos.z,
     vx: dir.x * weapon.speed,
     vz: dir.z * weapon.speed,
-    dmg: weapon.dmg,
+    dmg: weapon.dmg * (player.damageMultiplier || 1),
     color: weapon.color,
     size: weapon.size,
     owner: player.index,
@@ -1967,9 +2029,178 @@ function spawnSatellitePickup(config = null) {
   satellitePickup = createSatellitePickup(pos.x, pos.z);
 }
 
+function clearNeutralDog() {
+  if (!neutralDog) return;
+  if (neutralDog.group) disposeObjectTree(neutralDog.group);
+  if (neutralDog.shieldDrop) disposeObjectTree(neutralDog.shieldDrop);
+  neutralDog = null;
+}
+
+function createNeutralDog() {
+  const group = new THREE.Group();
+  const spriteMat = new THREE.SpriteMaterial({ map: DOG_TEXTURES.full, transparent: true, depthWrite: false });
+  const sprite = new THREE.Sprite(spriteMat);
+  sprite.center.set(0.5, 0.08);
+  sprite.scale.set(9.6, 6.4, 1);
+  group.add(sprite);
+  group.position.set(0, 0, 0);
+  scene.add(group);
+
+  const shieldMat = new THREE.SpriteMaterial({ map: DOG_TEXTURES.shield, transparent: true, depthWrite: false });
+  const shieldDrop = new THREE.Sprite(shieldMat);
+  shieldDrop.center.set(0.5, 0.08);
+  shieldDrop.scale.set(4.6, 4.8, 1);
+  shieldDrop.visible = false;
+  scene.add(shieldDrop);
+
+  return {
+    group,
+    sprite,
+    shieldDrop,
+    hp: DOG_MAX_HP,
+    alive: true,
+    shieldDropped: false,
+    targetIndex: null,
+    lastAttackerIndex: null,
+    lastDamagedAt: performance.now(),
+    lastAttackAt: 0,
+    attackWindupUntil: 0,
+    shieldDropX: 0,
+    shieldDropZ: 0
+  };
+}
+
+function spawnNeutralDog() {
+  clearNeutralDog();
+  neutralDog = createNeutralDog();
+}
+
+function updateNeutralDogVisuals() {
+  if (!neutralDog) return;
+  neutralDog.sprite.material.map = neutralDog.shieldDropped ? DOG_TEXTURES.noShield : DOG_TEXTURES.full;
+  neutralDog.sprite.material.needsUpdate = true;
+  neutralDog.group.visible = neutralDog.alive;
+  neutralDog.shieldDrop.visible = neutralDog.shieldDropped;
+  if (neutralDog.shieldDropped) {
+    neutralDog.shieldDrop.position.set(neutralDog.shieldDropX, 0.1, neutralDog.shieldDropZ);
+  }
+}
+
+function grantDogBlessing(player) {
+  if (!player) return null;
+  const blessings = ['double', 'shield', 'regen'];
+  const blessing = blessings[Math.floor(Math.random() * blessings.length)];
+  player.damageMultiplier = blessing === 'double' ? 2 : 1;
+  player.regenBuff = blessing === 'regen';
+  player.buffType = blessing;
+  if (blessing === 'shield') {
+    player.shield += 100;
+  }
+  updateHUD();
+  return blessing;
+}
+
+function damageNeutralDog(amount, attackerIndex) {
+  if (!enableNeutralDog || !neutralDog || !neutralDog.alive || amount <= 0) return;
+  neutralDog.hp = Math.max(0, neutralDog.hp - amount);
+  neutralDog.lastDamagedAt = performance.now();
+  neutralDog.targetIndex = attackerIndex;
+  neutralDog.lastAttackerIndex = attackerIndex;
+
+  if (!neutralDog.shieldDropped && neutralDog.hp <= DOG_SHIELD_BREAK_HP) {
+    neutralDog.shieldDropped = true;
+    neutralDog.shieldDropX = neutralDog.group.position.x + 2.1;
+    neutralDog.shieldDropZ = neutralDog.group.position.z + 0.8;
+    updateNeutralDogVisuals();
+  }
+
+  if (neutralDog.hp <= 0) {
+    neutralDog.alive = false;
+    updateNeutralDogVisuals();
+    if (Number.isInteger(attackerIndex) && players[attackerIndex]) {
+      grantDogBlessing(players[attackerIndex]);
+      const text = `${getPlayerDisplayName(attackerIndex)}击杀刀盾狗，获得刀盾狗的加持`;
+      showAnnouncement(text);
+      if (isHost) broadcast({ t: 'announce', text });
+    }
+  }
+}
+
+function updatePlayerBuffs(dt) {
+  const now = performance.now();
+  for (const player of players) {
+    if (!player || !player.alive) continue;
+    if (player.regenBuff && now - player.lastDamagedAt >= PLAYER_REGEN_BUFF_DELAY && player.hp < 100) {
+      player.hp = Math.min(100, player.hp + PLAYER_REGEN_BUFF_RATE * dt);
+    }
+  }
+}
+
+function updateNeutralDog(dt) {
+  if (!enableNeutralDog || !neutralDog || !neutralDog.alive) return;
+  const now = performance.now();
+  if (now - neutralDog.lastDamagedAt >= DOG_REGEN_DELAY && neutralDog.hp < DOG_MAX_HP) {
+    neutralDog.hp = Math.min(DOG_MAX_HP, neutralDog.hp + DOG_REGEN_RATE * dt);
+  }
+
+  const target = Number.isInteger(neutralDog.targetIndex) ? players[neutralDog.targetIndex] : null;
+  if (!target || !target.alive || !target.mesh) {
+    neutralDog.attackWindupUntil = 0;
+    return;
+  }
+
+  const dx = target.mesh.position.x - neutralDog.group.position.x;
+  const dz = target.mesh.position.z - neutralDog.group.position.z;
+  const dist = Math.hypot(dx, dz);
+
+  if (neutralDog.attackWindupUntil) {
+    if (now >= neutralDog.attackWindupUntil) {
+      neutralDog.attackWindupUntil = 0;
+      neutralDog.lastAttackAt = now;
+      if (dist <= DOG_ATTACK_RANGE + 0.6) {
+        applyDamage(target, DOG_ATTACK_DAMAGE);
+      }
+    }
+    return;
+  }
+
+  if (dist > DOG_ATTACK_RANGE && dist > 0.001) {
+    neutralDog.group.position.x += (dx / dist) * DOG_MOVE_SPEED * dt;
+    neutralDog.group.position.z += (dz / dist) * DOG_MOVE_SPEED * dt;
+    neutralDog.group.position.x = THREE.MathUtils.clamp(neutralDog.group.position.x, -MAP_HALF + 5, MAP_HALF - 5);
+    neutralDog.group.position.z = THREE.MathUtils.clamp(neutralDog.group.position.z, -MAP_HALF + 5, MAP_HALF - 5);
+  }
+
+  if (dist <= DOG_ATTACK_RANGE && now - neutralDog.lastAttackAt >= DOG_ATTACK_CD) {
+    neutralDog.attackWindupUntil = now + DOG_ATTACK_WINDUP;
+  }
+}
+
+function syncNeutralDogFromState(state) {
+  if (!state || !state.enabled) {
+    clearNeutralDog();
+    return;
+  }
+  if (!neutralDog) spawnNeutralDog();
+  neutralDog.hp = state.hp;
+  neutralDog.alive = state.alive;
+  neutralDog.shieldDropped = state.shieldDropped;
+  neutralDog.group.position.x += (state.x - neutralDog.group.position.x) * 0.3;
+  neutralDog.group.position.z += (state.z - neutralDog.group.position.z) * 0.3;
+  neutralDog.shieldDropX = state.sdx;
+  neutralDog.shieldDropZ = state.sdz;
+  updateNeutralDogVisuals();
+}
+
 // ============== GAME MECHANICS ==============
 function applyDamage(player, dmg) {
   if (!player.alive) return;
+  player.lastDamagedAt = performance.now();
+  if (player.shield > 0) {
+    const absorbed = Math.min(player.shield, dmg);
+    player.shield -= absorbed;
+    dmg -= absorbed;
+  }
   player.hp -= dmg;
   player.hitT = 1;
   if (player.hp <= 0) {
@@ -1983,6 +2214,28 @@ function applyDamage(player, dmg) {
     }
   }
   updateHUD();
+}
+
+function getPlayerDisplayName(index) {
+  return (lobbyState.players[index] && lobbyState.players[index].name) || PLAYER_NAMES[index] || `玩家${index + 1}`;
+}
+
+function getPlayerStatusText(player) {
+  const parts = [];
+  if (player.shield > 0) parts.push(`护盾 ${Math.round(player.shield)}`);
+  if (player.damageMultiplier > 1) parts.push('攻击 x2');
+  if (player.regenBuff) parts.push('再生');
+  return parts.length ? parts.join(' · ') : '状态：无';
+}
+
+function showAnnouncement(text, duration = 3600) {
+  const banner = document.getElementById('announcement-banner');
+  banner.textContent = text;
+  banner.classList.add('show');
+  if (announcementHideTimer) clearTimeout(announcementHideTimer);
+  announcementHideTimer = window.setTimeout(() => {
+    banner.classList.remove('show');
+  }, duration);
 }
 
 function checkWinner() {
@@ -2063,7 +2316,8 @@ function maybeStartRematch() {
     poison: document.getElementById('opt-poison').checked,
     spread: document.getElementById('opt-spread').checked,
     mines: document.getElementById('opt-mines').checked,
-    satellite: document.getElementById('opt-satellite').checked
+    satellite: document.getElementById('opt-satellite').checked,
+    dog: document.getElementById('opt-dog').checked
   };
   const map = startGame({ cfg });
   broadcast({ t: 'start', cfg, players: lobbyState.players, map });
@@ -2111,6 +2365,7 @@ function createMine(player) {
     x: pos.x,
     z: pos.z,
     owner: player.index,
+    dmg: MINE_DAMAGE * (player.damageMultiplier || 1),
     armed: false,
     mesh: null
   };
@@ -2144,6 +2399,7 @@ function fireSatelliteLaser(player, options = {}) {
   player.satelliteEndTime = player.satelliteFireTime + SATELLITE_EFFECT_MS;
   player.satelliteDamageApplied = false;
   player.satelliteHitTargets = new Set();
+  player.satelliteHitDog = false;
 
   const beam = createSatelliteBeamMesh();
   beam.position.set(player.satelliteTarget.x, 0, player.satelliteTarget.z);
@@ -2383,8 +2639,8 @@ function updateMines(dt) {
         const dist = Math.sqrt(dx * dx + dz * dz);
         
         if (dist < TANK_RADIUS + MINE_RADIUS) {
-          applyDamage(player, MINE_DAMAGE);
-          broadcast({ t: 'dmg', p: player.index, d: MINE_DAMAGE, m: true });
+          applyDamage(player, mine.dmg || MINE_DAMAGE);
+          broadcast({ t: 'dmg', p: player.index, d: mine.dmg || MINE_DAMAGE, m: true });
           
           mine.mesh.visible = false;
           mine.armed = false;
@@ -2492,9 +2748,27 @@ function updateSatellitePlayers(dt) {
       const dx = target.mesh.position.x - player.satelliteTarget.x;
       const dz = target.mesh.position.z - player.satelliteTarget.z;
       if (Math.sqrt(dx * dx + dz * dz) <= SATELLITE_RADIUS) {
-        applyDamage(target, SATELLITE_DAMAGE);
+        applyDamage(target, SATELLITE_DAMAGE * (player.damageMultiplier || 1));
         player.satelliteHitTargets.add(target.index);
-        broadcast({ t: 'dmg', p: target.index, d: SATELLITE_DAMAGE, s: true });
+        broadcast({ t: 'dmg', p: target.index, d: SATELLITE_DAMAGE * (player.damageMultiplier || 1), s: true });
+      }
+    }
+
+    if (enableNeutralDog && neutralDog && neutralDog.alive && !player.satelliteHitDog) {
+      const ddx = neutralDog.group.position.x - player.satelliteTarget.x;
+      const ddz = neutralDog.group.position.z - player.satelliteTarget.z;
+      if (Math.sqrt(ddx * ddx + ddz * ddz) <= SATELLITE_RADIUS) {
+        damageNeutralDog(SATELLITE_DAMAGE * (player.damageMultiplier || 1), player.index);
+        player.satelliteHitDog = true;
+      }
+    }
+
+    if (enableNeutralDog && neutralDog && neutralDog.alive && !player.satelliteHitDog) {
+      const dx = neutralDog.group.position.x - player.satelliteTarget.x;
+      const dz = neutralDog.group.position.z - player.satelliteTarget.z;
+      if (Math.sqrt(dx * dx + dz * dz) <= SATELLITE_RADIUS) {
+        damageNeutralDog(SATELLITE_DAMAGE * (player.damageMultiplier || 1), player.index);
+        player.satelliteHitDog = true;
       }
     }
   }
@@ -2537,6 +2811,17 @@ function updateBullets(dt, visualOnly = false) {
       scene.remove(b.mesh);
       bullets.splice(i, 1);
       continue;
+    }
+
+    if (!visualOnly && enableNeutralDog && neutralDog && neutralDog.alive) {
+      const ddx = neutralDog.group.position.x - b.x;
+      const ddz = neutralDog.group.position.z - b.z;
+      if (Math.sqrt(ddx * ddx + ddz * ddz) < DOG_HIT_RADIUS) {
+        damageNeutralDog(b.dmg, b.owner);
+        scene.remove(b.mesh);
+        bullets.splice(i, 1);
+        continue;
+      }
     }
 
     // Hit players
@@ -3002,6 +3287,7 @@ function updateHUD() {
   info.querySelector('.stamina-fill').style.width = Math.max(0, player.stamina) + '%';
   info.querySelector('.stamina-text').textContent = Math.round(Math.max(0, player.stamina)) + '%';
   info.querySelector('.weapon span').textContent = WEAPONS[player.weapon].name;
+  info.querySelector('.status').textContent = getPlayerStatusText(player);
 
   for (const tank of players) updateTankHpBar(tank);
 }
@@ -3201,6 +3487,10 @@ function handleMessage(data, conn) {
       showWinner(data.w);
       break;
 
+    case 'announce':
+      if (data.text) showAnnouncement(data.text);
+      break;
+
     case 'rematchReady':
       if (isHost && roundEnded && Number.isInteger(data.p)) {
         rematchVotes[data.p] = true;
@@ -3266,7 +3556,11 @@ function applyRemoteState(state) {
       if (player.turretPivot) player.turretPivot.rotation.y = ps.ty;
     }
     player.hp = ps.hp;
+    player.shield = typeof ps.sh === 'number' ? ps.sh : player.shield;
     player.stamina = typeof ps.st === 'number' ? ps.st : player.stamina;
+    player.damageMultiplier = typeof ps.dm === 'number' ? ps.dm : player.damageMultiplier;
+    player.regenBuff = !!ps.rg;
+    player.buffType = ps.bf || player.buffType;
     player.weapon = ps.w;
     player.alive = ps.alive;
     player.hasSatellite = !!ps.hs;
@@ -3293,6 +3587,8 @@ function applyRemoteState(state) {
 
   // Update bullets
   // (simplified - in production you'd sync bullet IDs properly)
+
+  syncNeutralDogFromState(state.dog || null);
 
   if (localPlayerIndex >= 0 && players[localPlayerIndex]) {
     scoping = !!players[localPlayerIndex].scoping;
@@ -3451,6 +3747,8 @@ function gameLoop() {
     if (enablePoisonCircle) updatePoison(dt);
     updateBullets(dt);
     updateHitFlash(dt);
+    updatePlayerBuffs(dt);
+    updateNeutralDog(dt);
 
     // Broadcast state
     const now = performance.now();
@@ -3463,7 +3761,11 @@ function gameLoop() {
           r: p.rotation || 0,
           ty: p.turretYaw || 0,
           hp: p.hp,
+          sh: p.shield || 0,
           st: p.stamina,
+          dm: p.damageMultiplier || 1,
+          rg: !!p.regenBuff,
+          bf: p.buffType || '',
           w: p.weapon,
           alive: p.alive,
           hs: !!p.hasSatellite,
@@ -3472,7 +3774,17 @@ function gameLoop() {
           sc: p.scoping,
           tx: p.satelliteTarget ? p.satelliteTarget.x : 0,
           tz: p.satelliteTarget ? p.satelliteTarget.z : 0
-        }))
+        })),
+        dog: neutralDog ? {
+          enabled: enableNeutralDog,
+          alive: neutralDog.alive,
+          x: neutralDog.group.position.x,
+          z: neutralDog.group.position.z,
+          hp: neutralDog.hp,
+          shieldDropped: neutralDog.shieldDropped,
+          sdx: neutralDog.shieldDropX,
+          sdz: neutralDog.shieldDropZ
+        } : { enabled: false }
       };
       broadcast(state);
       lastStateBroadcast = now;
@@ -3742,12 +4054,14 @@ function startGame(startData = null) {
     enableBulletSpread = !!cfg.spread;
     enableMines = !!cfg.mines;
     enableSatellite = !!cfg.satellite;
+    enableNeutralDog = !!cfg.dog;
   } else {
     enableCollisionDamage = document.getElementById('opt-collision').checked;
     enablePoisonCircle = document.getElementById('opt-poison').checked;
     enableBulletSpread = document.getElementById('opt-spread').checked;
     enableMines = document.getElementById('opt-mines').checked;
     enableSatellite = document.getElementById('opt-satellite').checked;
+    enableNeutralDog = document.getElementById('opt-dog').checked;
   }
 
   // Spawn environment
@@ -3764,6 +4078,9 @@ function startGame(startData = null) {
   if (enablePoisonCircle) createPoisonCircle();
   if (enableSatellite) {
     spawnSatellitePickup(mapConfig ? mapConfig.satellitePickup : null);
+  }
+  if (enableNeutralDog) {
+    spawnNeutralDog();
   }
   if (!mapConfig) {
     currentMapConfig = buildCurrentMapConfig();
@@ -3827,7 +4144,8 @@ document.getElementById('btn-start').addEventListener('click', () => {
       poison: document.getElementById('opt-poison').checked,
       spread: document.getElementById('opt-spread').checked,
       mines: document.getElementById('opt-mines').checked,
-      satellite: document.getElementById('opt-satellite').checked
+      satellite: document.getElementById('opt-satellite').checked,
+      dog: document.getElementById('opt-dog').checked
     };
     const map = startGame({ cfg });
     broadcast({ t: 'start', cfg, players: lobbyState.players, map });
