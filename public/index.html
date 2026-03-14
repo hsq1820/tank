@@ -3,14 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>坦克大作战 - 模式选择</title>
+  <title>坦克突击：全武装对决</title>
   <style>
+    :root {
+      --font-ui: "Microsoft YaHei", "Segoe UI", sans-serif;
+      --page-bg: radial-gradient(circle at 20% 0%, #20395b 0%, #0b1220 45%, #05070d 100%);
+      --surface-card: rgba(11, 19, 33, 0.76);
+      --surface-panel: rgba(17, 28, 46, 0.9);
+      --border-soft: rgba(255,255,255,0.12);
+      --border-strong: rgba(125, 220, 255, 0.26);
+      --text-primary: #f4f8ff;
+      --text-muted: #a8bdd8;
+      --accent-cool: #57d3ff;
+      --accent-cool-strong: #0f88ff;
+      --accent-warm: #ff7d52;
+      --radius-card: 24px;
+      --radius-control: 16px;
+      --radius-pill: 999px;
+      --shadow-card: 0 24px 54px rgba(2, 7, 18, 0.42);
+      --shadow-float: 0 16px 34px rgba(2, 7, 18, 0.28);
+      --blur-glass: blur(14px);
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       min-height: 100vh;
-      background: radial-gradient(circle at top, #dff4ff 0%, #a8d5ff 36%, #4e7aa7 100%);
-      font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
-      color: #142235;
+      background: var(--page-bg);
+      font-family: var(--font-ui);
+      color: var(--text-primary);
       padding: 28px 18px 42px;
     }
     .shell {
@@ -20,11 +39,11 @@
       gap: 18px;
     }
     .card {
-      background: rgba(255,255,255,0.82);
-      border: 1px solid rgba(255,255,255,0.5);
-      border-radius: 22px;
-      box-shadow: 0 18px 40px rgba(14, 32, 52, 0.18);
-      backdrop-filter: blur(10px);
+      background: var(--surface-card);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+      backdrop-filter: var(--blur-glass);
     }
     .hero {
       padding: 34px 28px;
@@ -36,7 +55,7 @@
       margin-bottom: 10px;
     }
     .subtitle {
-      color: #45617f;
+      color: var(--text-muted);
       margin-bottom: 24px;
       line-height: 1.7;
     }
@@ -57,34 +76,35 @@
       font-weight: 700;
       letter-spacing: 0.5px;
       transition: transform 0.16s, box-shadow 0.16s;
+      box-shadow: var(--shadow-float);
     }
     .mode-btn:hover {
       transform: translateY(-2px);
       box-shadow: 0 14px 28px rgba(19, 47, 76, 0.22);
     }
-    .mode-local { background: linear-gradient(135deg, #00b6ff, #256dff); }
-    .mode-online { background: linear-gradient(135deg, #ff8d4d, #ff4d7a); }
+    .mode-local { background: linear-gradient(135deg, var(--accent-cool), var(--accent-cool-strong)); }
+    .mode-online { background: linear-gradient(135deg, var(--accent-warm), #ff4d7a); }
     .hint {
-      color: #56708d;
+      color: var(--text-muted);
       font-size: 14px;
       line-height: 1.6;
     }
     .ghost-btn {
       padding: 11px 16px;
-      border-radius: 999px;
-      border: 1px solid rgba(20,34,53,0.14);
-      background: rgba(255,255,255,0.8);
-      color: #18324d;
+      border-radius: var(--radius-control);
+      border: 1px solid var(--border-strong);
+      background: rgba(87,211,255,0.1);
+      color: var(--text-primary);
       cursor: pointer;
       font-size: 14px;
       font-weight: 700;
-      box-shadow: 0 10px 20px rgba(14, 32, 52, 0.08);
+      box-shadow: var(--shadow-float);
     }
-    .ghost-btn:hover { background: rgba(255,255,255,0.94); }
+    .ghost-btn:hover { background: rgba(87,211,255,0.18); }
     .modal {
       position: fixed;
       inset: 0;
-      background: rgba(8, 18, 32, 0.52);
+      background: rgba(2, 7, 18, 0.7);
       display: none;
       align-items: center;
       justify-content: center;
@@ -96,11 +116,13 @@
       width: min(1020px, 100%);
       max-height: min(88vh, 920px);
       overflow: auto;
-      background: rgba(255,255,255,0.95);
-      border: 1px solid rgba(255,255,255,0.58);
-      border-radius: 22px;
-      box-shadow: 0 24px 52px rgba(14, 32, 52, 0.24);
+      background: var(--surface-panel);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
       padding: 22px;
+      color: var(--text-primary);
+      backdrop-filter: var(--blur-glass);
     }
     .modal-head {
       display: flex;
@@ -114,7 +136,7 @@
     .status {
       font-size: 13px;
       font-weight: 700;
-      color: #2a6b36;
+      color: #8de3a5;
     }
     .toolbar {
       display: flex;
@@ -128,9 +150,9 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
     .binding-section {
-      background: rgba(240,247,255,0.86);
-      border: 1px solid rgba(20,34,53,0.08);
-      border-radius: 16px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: var(--radius-control);
       padding: 16px;
     }
     .binding-section h3 {
@@ -150,26 +172,26 @@
       border-bottom: 1px dashed rgba(20,34,53,0.1);
     }
     .binding-row:last-child { border-bottom: none; }
-    .binding-label { font-size: 14px; color: #284666; }
+    .binding-label { font-size: 14px; color: var(--text-muted); }
     .bind-btn {
       min-width: 92px;
       padding: 8px 12px;
-      border: 1px solid rgba(20,34,53,0.14);
+      border: 1px solid rgba(255,255,255,0.12);
       border-radius: 10px;
-      background: #fff;
-      color: #18324d;
+      background: rgba(255,255,255,0.06);
+      color: var(--text-primary);
       cursor: pointer;
       font-weight: 700;
     }
     .bind-btn.waiting {
-      background: #18324d;
+      background: linear-gradient(135deg, var(--accent-cool), var(--accent-cool-strong));
       color: #fff;
-      border-color: #18324d;
+      border-color: transparent;
     }
     .footnote {
       margin-top: 14px;
       font-size: 13px;
-      color: #5c7390;
+      color: var(--text-muted);
       line-height: 1.7;
     }
     @media (max-width: 860px) {
@@ -183,7 +205,7 @@
 <body>
   <main class="shell">
     <section class="card hero">
-      <h1>坦克大作战</h1>
+      <h1>BATTLE TANK</h1>
       <p class="subtitle">选择模式开始战斗。主页里的键位设置会保存在当前浏览器，并同时作用于本地模式和联机模式。</p>
       <div class="mode-actions">
         <a class="mode-btn mode-local" href="/local">本地模式</a>

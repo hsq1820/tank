@@ -3,14 +3,34 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>坦克大作战 - 联机版</title>
+<title>联机模式</title>
 <style>
+:root {
+  --font-ui: 'Microsoft YaHei', 'Segoe UI', system-ui, sans-serif;
+  --page-bg: radial-gradient(circle at 20% 0%, #20395b 0%, #0b1220 45%, #05070d 100%);
+  --surface-card: rgba(11, 19, 33, 0.78);
+  --surface-panel: rgba(17, 28, 46, 0.92);
+  --surface-hud: rgba(9, 16, 30, 0.68);
+  --border-soft: rgba(255,255,255,0.12);
+  --border-strong: rgba(125,220,255,0.28);
+  --text-primary: #f4f8ff;
+  --text-muted: #a8bdd8;
+  --accent-cool: #57d3ff;
+  --accent-cool-strong: #0f88ff;
+  --accent-warm: #ff7d52;
+  --radius-card: 24px;
+  --radius-control: 16px;
+  --radius-pill: 999px;
+  --shadow-card: 0 24px 54px rgba(2, 7, 18, 0.42);
+  --shadow-float: 0 16px 34px rgba(2, 7, 18, 0.28);
+  --blur-glass: blur(14px);
+}
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { 
   overflow: hidden; 
-  background: #0a0a0f; 
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  color: #fff;
+  background: var(--page-bg); 
+  font-family: var(--font-ui);
+  color: var(--text-primary);
 }
 #lobby {
   position: fixed;
@@ -19,18 +39,19 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 100%);
+  background: var(--page-bg);
   z-index: 1000;
 }
 #lobby.hidden { display: none; }
 .lobby-card {
-  background: rgba(255,255,255,0.05);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 16px;
+  background: var(--surface-card);
+  backdrop-filter: var(--blur-glass);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
   padding: 40px;
   width: 420px;
   max-width: 90vw;
+  box-shadow: var(--shadow-card);
 }
 
 /* Modal */
@@ -45,27 +66,28 @@ body {
 }
 .modal-overlay.show { display: flex; }
 .modal-card {
-  background: rgba(20,20,35,0.95);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 16px;
+  background: var(--surface-panel);
+  backdrop-filter: var(--blur-glass);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
   padding: 30px;
   width: 340px;
   max-width: 90vw;
   position: relative;
+  box-shadow: var(--shadow-card);
 }
 .modal-card h2 {
   text-align: center;
   font-size: 20px;
   margin-bottom: 24px;
-  color: #fff;
+  color: var(--text-primary);
 }
 .modal-card .input-group { margin: 16px 0; }
 .lobby-card h1 {
   text-align: center;
   font-size: 28px;
   margin-bottom: 30px;
-  background: linear-gradient(90deg, #00c6ff, #ff512f);
+  background: linear-gradient(90deg, var(--accent-cool), var(--accent-warm));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -75,21 +97,21 @@ body {
   padding: 14px 20px;
   margin: 8px 0;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
 }
 .btn-primary {
-  background: linear-gradient(135deg, #00c6ff, #0072ff);
+  background: linear-gradient(135deg, var(--accent-cool), var(--accent-cool-strong));
   color: #fff;
 }
-.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,198,255,0.3); }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: var(--shadow-float); }
 .btn-secondary {
   background: rgba(255,255,255,0.1);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.2);
+  color: var(--text-primary);
+  border: 1px solid var(--border-soft);
 }
 .btn-secondary:hover { background: rgba(255,255,255,0.15); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -104,22 +126,22 @@ body {
   min-width: 96px;
   padding: 10px 16px;
   border-radius: 999px;
-  background: rgba(8, 16, 32, 0.7);
-  border: 1px solid rgba(255,255,255,0.18);
-  color: #fff;
+  background: rgba(8, 16, 32, 0.76);
+  border: 1px solid var(--border-soft);
+  color: var(--text-primary);
   text-decoration: none;
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.3px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 10px 24px rgba(0,0,0,0.2);
+  backdrop-filter: var(--blur-glass);
+  box-shadow: var(--shadow-float);
 }
 .page-back:hover {
   background: rgba(12, 26, 48, 0.86);
 }
 .page-back.hidden { display: none; }
 .input-group { margin: 15px 0; }
-.input-group label { display: block; margin-bottom: 6px; color: #888; font-size: 14px; }
+.input-group label { display: block; margin-bottom: 6px; color: var(--text-muted); font-size: 14px; }
 .input-group input {
   width: 100%;
   padding: 12px 16px;
@@ -177,7 +199,7 @@ body {
 .small-btn:hover { background: rgba(255,255,255,0.14); }
 .room-note {
   font-size: 12px;
-  color: #9fb2cc;
+  color: var(--text-muted);
   line-height: 1.6;
 }
 .room-list {
@@ -192,10 +214,10 @@ body {
   justify-content: space-between;
   gap: 14px;
   padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-soft);
   background: rgba(255,255,255,0.06);
-  color: #fff;
+  color: var(--text-primary);
   cursor: pointer;
   text-align: left;
 }
@@ -229,7 +251,7 @@ body {
 }
 .room-subtitle {
   font-size: 12px;
-  color: #9fb2cc;
+  color: var(--text-muted);
 }
 .room-status-chip {
   display: inline-flex;
@@ -335,11 +357,13 @@ body {
   align-items: flex-start;
 }
 .p-info {
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
+  background: var(--surface-hud);
+  backdrop-filter: var(--blur-glass);
+  border-radius: var(--radius-card);
   padding: 15px 20px;
   min-width: 200px;
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-float);
 }
 .p-info .name {
   font-size: 16px;
@@ -386,7 +410,7 @@ body {
 }
 .p-info .weapon {
   font-size: 12px;
-  color: #aaa;
+  color: var(--text-muted);
 }
 .p-info .weapon span { color: #fff; font-weight: bold; }
 .minimap-container {
@@ -395,11 +419,12 @@ body {
   right: 20px;
   width: 180px;
   height: 180px;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(10px);
+  background: var(--surface-hud);
+  backdrop-filter: var(--blur-glass);
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.2);
+  border: 1px solid var(--border-soft);
   overflow: hidden;
+  box-shadow: var(--shadow-float);
 }
 #minimap { width: 100%; height: 100%; }
 .winner-overlay {
@@ -409,8 +434,9 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.8);
+  background: rgba(2, 7, 18, 0.84);
   z-index: 200;
+  backdrop-filter: blur(10px);
 }
 .winner-overlay.show { display: flex; }
 .winner-overlay h1 {
@@ -499,12 +525,14 @@ body {
   position: fixed;
   bottom: 20px;
   left: 20px;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(10px);
-  border-radius: 8px;
+  background: var(--surface-hud);
+  backdrop-filter: var(--blur-glass);
+  border-radius: var(--radius-control);
   padding: 12px 16px;
   font-size: 12px;
-  color: #888;
+  color: var(--text-muted);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-float);
 }
 .controls-hint kbd {
   background: rgba(255,255,255,0.1);
@@ -659,7 +687,7 @@ body {
 
 <div id="lobby">
   <div class="lobby-card" id="lobby-main">
-    <h1>坦克大作战 - 联机版</h1>
+    <h1>联机模式</h1>
     <div class="input-group">
       <label>你的昵称</label>
       <input type="text" id="main-player-name" placeholder="输入昵称" maxlength="12">
@@ -2637,9 +2665,12 @@ function renderView() {
     if (satellitePad) satellitePad.classList.remove('active');
     camera.fov = NORMAL_FOV;
     camera.updateProjectionMatrix();
-    const offset = new THREE.Vector3(0, 5, 12).applyQuaternion(player.mesh.quaternion);
+    const turretWorldQuat = new THREE.Quaternion();
+    player.muzzle.getWorldQuaternion(turretWorldQuat);
+    const offset = new THREE.Vector3(0, 5, 12).applyQuaternion(turretWorldQuat);
     camera.position.set(pos.x + offset.x, offset.y, pos.z + offset.z);
-    camera.lookAt(pos.x, 1, pos.z);
+    const lookTarget = pos.clone().add(new THREE.Vector3(0, 1, -1).applyQuaternion(turretWorldQuat).multiplyScalar(18));
+    camera.lookAt(lookTarget);
     scopeCanvas.classList.remove('active');
     if (scopeCanvas) {
       scopeCanvas.width = window.innerWidth;
