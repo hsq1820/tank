@@ -649,6 +649,7 @@
         const DOG_SHIELD_BREAK_HP = 100;
         const DOG_HIT_RADIUS = 2.8;
         const DOG_ATTACK_RANGE = 4.1;
+        const DOG_SHIELD_DROP_ANIM_MS = 1200;
         const PLAYER_REGEN_BUFF_DELAY = 5000;
         const PLAYER_REGEN_BUFF_RATE = 1;
 
@@ -1299,6 +1300,7 @@
                 lastDamagedAt: Date.now(),
                 lastAttackAt: 0,
                 attackWindupUntil: 0,
+                shieldDropAt: 0,
                 shieldDropX: 0,
                 shieldDropZ: 0
             };
@@ -1441,7 +1443,7 @@
 
         function getHpFillColor(hp) {
             if (hp >= 60) return 'linear-gradient(90deg, #34d399, #10b981)';
-            if (hp >= 35) return 'linear-gradient(90deg, #facc15, #f59e0b)';
+            if (hp >= 30) return 'linear-gradient(90deg, #facc15, #f59e0b)';
             return 'linear-gradient(90deg, #fb7185, #ef4444)';
         }
 
@@ -2132,15 +2134,16 @@
             orientHpBarsForCamera(cam, player === players.p1 ? 'p1' : 'p2');
             renderer.render(scene, cam);
             if (isScoping) drawScopeOverlay(x, y, w, h);
-            if (isSatelliteView) drawSatelliteOverlay(player, x, y, w, h);
+            if (isSatelliteView) drawSatelliteOverlay(player, cam, x, y, w, h);
             if (player.shake > 0) player.shake *= 0.9;
         }
 
-        function drawSatelliteOverlay(player, x, y, w, h) {
+        function drawSatelliteOverlay(player, cam, x, y, w, h) {
             const canvasH = scopeCanvas.height;
             const cy = canvasH - y - h;
-            const px = x + ((player.satelliteTarget.x + MAP_HALF) / (MAP_HALF * 2)) * w;
-            const py = cy + ((player.satelliteTarget.z + MAP_HALF) / (MAP_HALF * 2)) * h;
+            const projected = new THREE.Vector3(player.satelliteTarget.x, 0, player.satelliteTarget.z).project(cam);
+            const px = x + (projected.x * 0.5 + 0.5) * w;
+            const py = cy + (-projected.y * 0.5 + 0.5) * h;
             const radiusPx = (SATELLITE_RADIUS / (MAP_HALF * 2)) * Math.min(w, h);
 
             scopeCtx.save();
