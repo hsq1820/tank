@@ -1134,7 +1134,7 @@
                 if (obj.material && obj.userData.stealthed !== undefined) {
                     if (obj.userData.stealthed) {
                         obj.material.transparent = true;
-                        obj.material.opacity = 0.18;
+                        obj.material.opacity = 0.12;
                     } else {
                         obj.material.transparent = obj.userData.originalTransparent || false;
                         obj.material.opacity = obj.userData.originalOpacity !== undefined ? obj.userData.originalOpacity : 1;
@@ -1145,7 +1145,7 @@
             const self = players[viewerKey];
             self.mesh.traverse(obj => {
                 if (obj.material) {
-                    const opacity = self.inGrass ? 0.58 : (obj.userData.originalOpacity !== undefined ? obj.userData.originalOpacity : 1);
+                    const opacity = self.inGrass ? 0.42 : (obj.userData.originalOpacity !== undefined ? obj.userData.originalOpacity : 1);
                     obj.material.transparent = self.inGrass || obj.userData.originalTransparent || false;
                     obj.material.opacity = opacity;
                 }
@@ -2286,7 +2286,10 @@
             const projected = new THREE.Vector3(player.satelliteTarget.x, 0, player.satelliteTarget.z).project(cam);
             const px = x + (projected.x * 0.5 + 0.5) * w;
             const py = cy + (-projected.y * 0.5 + 0.5) * h;
-            const radiusPx = (SATELLITE_RADIUS / (MAP_HALF * 2)) * Math.min(w, h);
+            const edgeProjected = new THREE.Vector3(player.satelliteTarget.x + SATELLITE_RADIUS, 0, player.satelliteTarget.z).project(cam);
+            const edgeX = x + (edgeProjected.x * 0.5 + 0.5) * w;
+            const edgeY = cy + (-edgeProjected.y * 0.5 + 0.5) * h;
+            const radiusPx = Math.max(18, Math.hypot(edgeX - px, edgeY - py));
 
             scopeCtx.save();
             scopeCtx.beginPath();
@@ -2329,7 +2332,7 @@
             const cy = canvasH - y - h; // 翻转Y
             const cx = x + w / 2;
             const ccY = cy + h / 2;
-            const radius = Math.min(w, h) * 0.42;
+            const radius = Math.min(w, h) * 0.495;
 
             scopeCtx.save();
             // 限制绘制区域到该玩家的视口

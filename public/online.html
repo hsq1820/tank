@@ -2723,7 +2723,7 @@ function updateGrassStealth() {
     player.inGrass = inGrass;
     
     // Apply stealth/soft blur visual
-    const targetOpacity = inGrass ? (player.index === localPlayerIndex ? 0.58 : 0.18) : 1.0;
+    const targetOpacity = inGrass ? (player.index === localPlayerIndex ? 0.42 : 0.12) : 1.0;
     player.mesh.traverse(child => {
       if (child.isMesh && child.material) {
         child.material.transparent = inGrass;
@@ -3226,10 +3226,8 @@ function drawSatelliteOverlay(player) {
 
   const cx = w / 2;
   const cy = h / 2;
-  const mapRadiusPx = Math.min(w, h) * 0.42;
+  const mapRadiusPx = Math.min(w, h) * 0.495;
   const mapScale = mapRadiusPx / MAP_HALF;
-  // Keep blast radius scale identical to local mode.
-  const blastRadiusPx = (SATELLITE_RADIUS / (MAP_HALF * 2)) * Math.min(w, h);
 
   const worldToScreen = (x, z) => {
     const projected = new THREE.Vector3(x, 0, z).project(camera);
@@ -3240,6 +3238,8 @@ function drawSatelliteOverlay(player) {
   };
   const target = player.satelliteTarget;
   const targetScreen = worldToScreen(target.x, target.z);
+  const edgeScreen = worldToScreen(target.x + SATELLITE_RADIUS, target.z);
+  const blastRadiusPx = Math.max(18, Math.hypot(edgeScreen.x - targetScreen.x, edgeScreen.y - targetScreen.y));
 
   // Dark mask
   satelliteCtx.fillStyle = 'rgba(0,0,0,0.72)';
