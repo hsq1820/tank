@@ -42,8 +42,10 @@
     }
     .mode-actions {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: 1fr;
       gap: 14px;
+      max-width: 420px;
+      margin: 0 auto;
     }
     .mode-btn {
       display: block;
@@ -62,23 +64,10 @@
     }
     .mode-local { background: linear-gradient(135deg, #00b6ff, #256dff); }
     .mode-online { background: linear-gradient(135deg, #ff8d4d, #ff4d7a); }
-    .settings-card {
-      padding: 24px 22px 26px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 18px;
-      flex-wrap: wrap;
-    }
-    .settings-title {
-      font-size: 24px;
-      margin-bottom: 8px;
-    }
     .hint {
       color: #56708d;
       font-size: 14px;
       line-height: 1.6;
-      max-width: 620px;
     }
     .ghost-btn {
       padding: 11px 16px;
@@ -187,8 +176,7 @@
       .section-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 620px) {
-      .mode-actions { grid-template-columns: 1fr; }
-      .hero, .settings-card, .modal-card { padding-left: 18px; padding-right: 18px; }
+      .hero, .modal-card { padding-left: 18px; padding-right: 18px; }
     }
   </style>
 </head>
@@ -200,15 +188,8 @@
       <div class="mode-actions">
         <a class="mode-btn mode-local" href="/local">本地模式</a>
         <a class="mode-btn mode-online" href="/online">联机模式</a>
+        <button class="ghost-btn" id="open-settings" type="button">键位设置</button>
       </div>
-    </section>
-
-    <section class="card settings-card">
-      <div>
-        <div class="settings-title">键位设置</div>
-        <div class="hint">键位设置不会直接展开占满主页。点击按钮后会打开弹窗；如果新键位和已有动作冲突，会自动与原绑定互换。</div>
-      </div>
-      <button class="ghost-btn" id="open-settings" type="button">打开键位设置</button>
     </section>
   </main>
 
@@ -217,7 +198,7 @@
       <div class="modal-head">
         <div>
           <div class="modal-title">键位设置</div>
-          <div class="hint">点击键位按钮后按下新按键即可保存。设置只保存在当前设备/浏览器，不会影响其他联机玩家。</div>
+          <div class="hint">如果新键位和已有动作冲突，会自动与原绑定互换。设置只保存在当前设备/浏览器，不会影响其他联机玩家。</div>
         </div>
         <div class="status" id="save-status">已读取当前设备键位</div>
       </div>

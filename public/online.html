@@ -529,8 +529,8 @@ body {
   position: fixed;
   left: 18px;
   bottom: 20px;
-  width: 120px;
-  height: 120px;
+  width: 156px;
+  height: 156px;
   border-radius: 50%;
   border: 2px solid rgba(255,255,255,0.18);
   background: rgba(0,0,0,0.35);
@@ -542,7 +542,7 @@ body {
 .mobile-joystick::after {
   content: '';
   position: absolute;
-  inset: 12px;
+  inset: 18px;
   border-radius: 50%;
   border: 2px dashed rgba(255, 210, 102, 0.35);
   pointer-events: none;
@@ -557,10 +557,10 @@ body {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 52px;
-  height: 52px;
-  margin-left: -26px;
-  margin-top: -26px;
+  width: 72px;
+  height: 72px;
+  margin-left: -36px;
+  margin-top: -36px;
   border-radius: 50%;
   background: radial-gradient(circle at 30% 30%, #8ee6ff, #0d85b5);
   border: 2px solid rgba(255,255,255,0.55);
@@ -706,6 +706,7 @@ body {
       <label><input type="checkbox" id="opt-spread" checked> 子弹散布</label>
       <label><input type="checkbox" id="opt-mines" checked> 地雷系统</label>
       <label><input type="checkbox" id="opt-satellite" checked> 卫星激光</label>
+      <div class="room-note" id="options-owner-note">仅房主可修改对局选项</div>
     </div>
     <button class="btn btn-primary" id="btn-start" disabled>等待玩家加入...</button>
     <button class="btn btn-secondary" id="btn-back">返回</button>
@@ -950,11 +951,13 @@ let scopeCanvas, scopeCtx;
 let satelliteCanvas, satelliteCtx;
 let minimapCanvas, minimapCtx;
 let isMobileTouch = false;
-let mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false };
-let prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false };
+let mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turretLeft: false, turretRight: false };
+let prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turretLeft: false, turretRight: false };
 let roomHeartbeatTimer = 0;
 let roomListRefreshTimer = 0;
 let roomListSnapshot = new Map();
+let roomListSignature = '';
+let currentMapConfig = null;
 
 function generateDefaultPlayerName() {
   return `玩家${Math.floor(1000 + Math.random() * 9000)}`;
@@ -1051,6 +1054,16 @@ function stopRoomListPolling() {
   }
 }
 
+function getRoomListSignature(rooms) {
+  return JSON.stringify((rooms || []).map((room) => ({
+    roomId: room.roomId,
+    roomName: room.roomName,
+    hostName: room.hostName,
+    playerCount: room.playerCount,
+    maxPlayers: room.maxPlayers
+  })));
+}
+
 async function unregisterRoomRegistry(roomId = lobbyState.roomId) {
   stopRoomHeartbeat();
   if (!roomId) return;
@@ -1072,6 +1085,7 @@ function renderRoomList(rooms) {
 
   if (!rooms.length) {
     roomListSnapshot = new Map();
+    roomListSignature = '[]';
     note.textContent = DISCOVERY_PEERS_URL ? '当前没有可加入的房间。' : '当前部署未启用房间列表，请通过房间ID加入。';
     return;
   }
@@ -1111,27 +1125,33 @@ function renderRoomList(rooms) {
   }
 
   roomListSnapshot = nextSnapshot;
+  roomListSignature = getRoomListSignature(rooms);
   note.textContent = changedCount > 0
     ? `大厅已刷新，${changedCount} 个房间人数刚刚变化`
     : `找到 ${rooms.length} 个房间 · 实时同步中`;
 }
 
-async function refreshRoomList() {
-  const container = document.getElementById('room-listings');
+async function refreshRoomList(force = false) {
   const note = document.getElementById('room-list-note');
-  container.innerHTML = '';
 
   if (!DISCOVERY_PEERS_URL) {
     note.textContent = '当前部署未启用房间列表，请通过房间ID加入。';
     return;
   }
 
-  note.textContent = '正在刷新房间列表...';
+  if (force || !roomListSignature) {
+    note.textContent = '正在刷新房间列表...';
+  }
   try {
     const response = await fetch(DISCOVERY_PEERS_URL, { cache: 'no-store' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const rooms = await response.json();
-    renderRoomList(Array.isArray(rooms) ? rooms.filter((room) => room && room.roomId) : []);
+    const nextRooms = Array.isArray(rooms) ? rooms.filter((room) => room && room.roomId) : [];
+    const nextSignature = getRoomListSignature(nextRooms);
+    if (!force && nextSignature === roomListSignature) {
+      return;
+    }
+    renderRoomList(nextRooms);
   } catch (error) {
     console.warn('Room list fetch failed:', error);
     note.textContent = '房间列表暂时不可用，请通过房间ID加入。';
@@ -1150,6 +1170,7 @@ function resetLobbyState() {
   localPlayerIndex = -1;
   lobbyState = { players: [], hostName: '', roomName: '', roomId: '' };
   roomListSnapshot = new Map();
+  roomListSignature = '';
   document.getElementById('players-container').innerHTML = '';
   document.getElementById('my-room-id').textContent = '...';
   document.getElementById('host-name-display').textContent = '-';
@@ -1319,14 +1340,41 @@ function setupMobileControls() {
   };
 
   const fireBtn = document.getElementById('mb-fire');
+  let firePointerId = null;
+  let fireStartX = 0;
   const setFire = (on) => {
     mobileInput.fire = on;
+    if (!on) {
+      mobileInput.turretLeft = false;
+      mobileInput.turretRight = false;
+    }
     fireBtn.classList.toggle('active', on);
     sendImmediateClientInput();
   };
-  fireBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); setFire(true); });
-  fireBtn.addEventListener('pointerup', (e) => { e.preventDefault(); setFire(false); });
-  fireBtn.addEventListener('pointercancel', (e) => { e.preventDefault(); setFire(false); });
+  fireBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    firePointerId = e.pointerId;
+    fireStartX = e.clientX;
+    fireBtn.setPointerCapture(e.pointerId);
+    setFire(true);
+  });
+  fireBtn.addEventListener('pointermove', (e) => {
+    if (firePointerId !== e.pointerId || !mobileInput.fire) return;
+    const deltaX = e.clientX - fireStartX;
+    mobileInput.turretLeft = deltaX < -16;
+    mobileInput.turretRight = deltaX > 16;
+    sendImmediateClientInput();
+  });
+  fireBtn.addEventListener('pointerup', (e) => {
+    if (firePointerId === e.pointerId) firePointerId = null;
+    e.preventDefault();
+    setFire(false);
+  });
+  fireBtn.addEventListener('pointercancel', (e) => {
+    if (firePointerId === e.pointerId) firePointerId = null;
+    e.preventDefault();
+    setFire(false);
+  });
   fireBtn.addEventListener('pointerleave', () => { setFire(false); });
 
   const weaponBtn = document.getElementById('mb-weapon');
@@ -1388,7 +1436,9 @@ function createPlayerState(index) {
     color: PLAYER_COLORS[index],
     name: PLAYER_NAMES[index],
     mesh: null,
+    turretPivot: null,
     muzzle: null,
+    turretYaw: 0,
     hitT: 0,
     shake: 0,
     speed: 16,
@@ -1414,7 +1464,7 @@ function createPlayerState(index) {
     x: 0, z: 0, rotation: 0,
     prevX: 0, prevZ: 0,
     prevForwardPressed: false,
-    input: { f: false, b: false, l: false, r: false, fire: false, mine: false, scope: false, sat: false, su: false, sd: false, sl: false, sr: false, scopeToggle: false, weaponToggle: false }
+    input: { f: false, b: false, l: false, r: false, fire: false, mine: false, scope: false, sat: false, su: false, sd: false, sl: false, sr: false, tl: false, tr: false, scopeToggle: false, weaponToggle: false }
   };
 }
 
@@ -1430,12 +1480,16 @@ function createTankMesh(color) {
   group.add(body);
 
   // Turret
+  const turretPivot = new THREE.Group();
+  turretPivot.position.y = 0;
+  group.add(turretPivot);
+
   const turretGeo = new THREE.BoxGeometry(1.4, 0.6, 1.4);
   const turretMat = new THREE.MeshStandardMaterial({ color: darkenColor(color, 0.8) });
   const turret = new THREE.Mesh(turretGeo, turretMat);
   turret.position.y = 1.0;
   turret.castShadow = true;
-  group.add(turret);
+  turretPivot.add(turret);
 
   // Gun
   const gunGeo = new THREE.CylinderGeometry(0.12, 0.12, 2.2, 8);
@@ -1443,19 +1497,19 @@ function createTankMesh(color) {
   const gun = new THREE.Mesh(gunGeo, gunMat);
   gun.rotation.x = Math.PI/2;
   gun.position.set(0, 1.0, -1.1);
-  group.add(gun);
+  turretPivot.add(gun);
 
   // Muzzle
   const muzzle = new THREE.Object3D();
   muzzle.position.set(0, 1.0, -2.2);
-  group.add(muzzle);
+  turretPivot.add(muzzle);
 
   // Hatch
   const hatchGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 8);
   const hatchMat = new THREE.MeshStandardMaterial({ color: darkenColor(color, 0.7) });
   const hatch = new THREE.Mesh(hatchGeo, hatchMat);
   hatch.position.y = 1.35;
-  group.add(hatch);
+  turretPivot.add(hatch);
 
   const hpBarAnchor = new THREE.Object3D();
   hpBarAnchor.position.set(0, 4.2, 0);
@@ -1470,7 +1524,7 @@ function createTankMesh(color) {
   group.userData.hpBarAnchor = hpBarAnchor;
   group.add(hpBarAnchor);
 
-  return { group, muzzle };
+  return { group, muzzle, turretPivot };
 }
 
 function updateTankHpBar(player) {
@@ -1480,6 +1534,29 @@ function updateTankHpBar(player) {
   const showBar = player.alive && player.hp > 0 && player.index !== localPlayerIndex;
   if (player.mesh.userData.hpBarAnchor) player.mesh.userData.hpBarAnchor.visible = showBar;
   player.mesh.userData.hpBarFill.visible = showBar;
+}
+
+function orientHpBarsForCamera(targetCamera) {
+  const desiredWorldQuat = targetCamera.quaternion.clone();
+  for (const player of players) {
+    if (!player || !player.mesh || !player.mesh.userData.hpBarAnchor) continue;
+    const anchor = player.mesh.userData.hpBarAnchor;
+    if (!anchor.visible) continue;
+    const parentQuat = new THREE.Quaternion();
+    player.mesh.getWorldQuaternion(parentQuat);
+    anchor.quaternion.copy(parentQuat.invert().multiply(desiredWorldQuat));
+  }
+}
+
+function updateTurretRotation(player, controls, dt) {
+  if (!player || !player.turretPivot || player.usingSatellite || player.satelliteFiring) return;
+  const inputLeft = !!controls.turretLeft;
+  const inputRight = !!controls.turretRight;
+  const speed = 2.3;
+  if (inputLeft === inputRight) return;
+  player.turretYaw += (inputLeft ? 1 : -1) * speed * dt;
+  player.turretYaw = THREE.MathUtils.euclideanModulo(player.turretYaw + Math.PI, Math.PI * 2) - Math.PI;
+  player.turretPivot.rotation.y = player.turretYaw;
 }
 
 function darkenColor(hex, factor) {
@@ -1565,7 +1642,9 @@ function buildBulletFromPlayer(player, now = performance.now()) {
   const spreadAngle = (enableBulletSpread && !player.scoping) ? (Math.random() - 0.5) * spread : 0;
 
   const dir = new THREE.Vector3(0, 0, -1);
-  dir.applyQuaternion(player.mesh.quaternion);
+  const muzzleQuat = new THREE.Quaternion();
+  player.muzzle.getWorldQuaternion(muzzleQuat);
+  dir.applyQuaternion(muzzleQuat);
   dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), spreadAngle);
 
   const muzzlePos = new THREE.Vector3();
@@ -1646,9 +1725,36 @@ function sendImmediateClientInput() {
   lastSentInputAt = performance.now();
 }
 
+function createRockFromConfig(config) {
+  const scale = config.scale;
+  const geo = new THREE.DodecahedronGeometry(2 * scale);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.9 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(config.x, scale, config.z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  return { mesh, x: config.x, z: config.z, radius: scale * 2, scale };
+}
+
+function buildCurrentMapConfig() {
+  return {
+    rocks: rocks.map((rock) => ({ x: rock.x, z: rock.z, scale: rock.scale || (rock.radius / 2) })),
+    healthPacks: healthPacks.map((pack) => ({ x: pack.x, z: pack.z, bobOffset: pack.bobOffset || 0 })),
+    grassPatches: grassPatches.map((patch) => ({ x: patch.x, z: patch.z, radius: patch.radius })),
+    satellitePickup: satellitePickup ? { x: satellitePickup.x, z: satellitePickup.z, rotOffset: satellitePickup.rotOffset || 0 } : null
+  };
+}
+
 // ============== ENVIRONMENT ==============
-function spawnRocks() {
+function spawnRocks(layout = null) {
   rocks = [];
+  if (Array.isArray(layout)) {
+    for (const config of layout) {
+      rocks.push(createRockFromConfig(config));
+    }
+    return;
+  }
   for (let i = 0; i < 20; i++) {
     let x, z, valid;
     do {
@@ -1669,7 +1775,7 @@ function spawnRocks() {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
-    rocks.push({ mesh, x, z, radius: scale * 2 });
+    rocks.push({ mesh, x, z, radius: scale * 2, scale });
   }
 }
 
@@ -1687,7 +1793,7 @@ function createPoisonCircle() {
   scene.add(poisonCircle);
 }
 
-function createHealthPack(x, z) {
+function createHealthPack(x, z, bobOffset = Math.random() * Math.PI * 2) {
   const group = new THREE.Group();
   const boxGeo = new THREE.BoxGeometry(1.5, 1, 1.5);
   const boxMat = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
@@ -1706,11 +1812,17 @@ function createHealthPack(x, z) {
 
   group.position.set(x, 0.5, z);
   scene.add(group);
-  return { mesh: group, x, z, bobOffset: Math.random() * Math.PI * 2 };
+  return { mesh: group, x, z, bobOffset };
 }
 
-function spawnHealthPacks() {
+function spawnHealthPacks(layout = null) {
   healthPacks = [];
+  if (Array.isArray(layout)) {
+    for (const pack of layout) {
+      healthPacks.push(createHealthPack(pack.x, pack.z, pack.bobOffset));
+    }
+    return;
+  }
   for (let i = 0; i < 3; i++) {
     const pos = findSafeSpawnPosition(25, 8, 10, 8);
     healthPacks.push(createHealthPack(pos.x, pos.z));
@@ -1745,8 +1857,14 @@ function createGrassPatch(x, z, radius) {
   return { mesh: group, x, z, radius };
 }
 
-function spawnGrassPatches() {
+function spawnGrassPatches(layout = null) {
   grassPatches = [];
+  if (Array.isArray(layout)) {
+    for (const patch of layout) {
+      grassPatches.push(createGrassPatch(patch.x, patch.z, patch.radius));
+    }
+    return;
+  }
   const count = 8 + Math.floor(Math.random() * 5);
   for (let i = 0; i < count; i++) {
     const pos = findSafeSpawnPosition(20, 5, 8, 5);
@@ -1777,7 +1895,7 @@ function findSafeSpawnPosition(minFromCenter, minRockDist, minGrassDist, minPack
   return { x, z };
 }
 
-function createSatellitePickup(x, z) {
+function createSatellitePickup(x, z, rotOffset = Math.random() * Math.PI * 2) {
   const group = new THREE.Group();
 
   const octaGeo = new THREE.OctahedronGeometry(1.4);
@@ -1809,10 +1927,14 @@ function createSatellitePickup(x, z) {
 
   group.position.set(x, 0, z);
   scene.add(group);
-  return { mesh: group, x, z, rotOffset: Math.random() * Math.PI * 2 };
+  return { mesh: group, x, z, rotOffset };
 }
 
-function spawnSatellitePickup() {
+function spawnSatellitePickup(config = null) {
+  if (config) {
+    satellitePickup = createSatellitePickup(config.x, config.z, config.rotOffset);
+    return;
+  }
   const pos = findSafeSpawnPosition(30, 8, 10, 8);
   satellitePickup = createSatellitePickup(pos.x, pos.z);
 }
@@ -1915,8 +2037,8 @@ function maybeStartRematch() {
     mines: document.getElementById('opt-mines').checked,
     satellite: document.getElementById('opt-satellite').checked
   };
-  startGame(cfg);
-  broadcast({ t: 'start', cfg, players: lobbyState.players });
+  const map = startGame({ cfg });
+  broadcast({ t: 'start', cfg, players: lobbyState.players, map });
 }
 
 function showWinner(winnerIndex) {
@@ -2506,7 +2628,9 @@ function renderView() {
     camera.updateProjectionMatrix();
     const eyePos = player.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
     camera.position.copy(eyePos);
-    const lookTarget = eyePos.clone().add(new THREE.Vector3(0, 0, -1).applyQuaternion(player.mesh.quaternion).multiplyScalar(100));
+    const turretWorldQuat = new THREE.Quaternion();
+    player.muzzle.getWorldQuaternion(turretWorldQuat);
+    const lookTarget = eyePos.clone().add(new THREE.Vector3(0, 0, -1).applyQuaternion(turretWorldQuat).multiplyScalar(100));
     camera.lookAt(lookTarget);
     scopeCanvas.classList.add('active');
   } else {
@@ -2532,6 +2656,7 @@ function renderView() {
     satelliteCanvas.classList.remove('active');
   }
 
+  orientHpBarsForCamera(camera);
   renderer.render(scene, camera);
 
   if (!player.usingSatellite && scoping) {
@@ -2955,7 +3080,7 @@ function handleMessage(data, conn) {
         if (Array.isArray(data.players)) {
           lobbyState.players = data.players;
         }
-        startGame(data.cfg || null);
+        startGame({ cfg: data.cfg || null, map: data.map || null });
       }
       break;
 
@@ -3105,6 +3230,10 @@ function applyRemoteState(state) {
       player.mesh.position.z += (ps.z - player.mesh.position.z) * 0.3;
       player.mesh.rotation.y = ps.r;
     }
+    if (typeof ps.ty === 'number') {
+      player.turretYaw = ps.ty;
+      if (player.turretPivot) player.turretPivot.rotation.y = ps.ty;
+    }
     player.hp = ps.hp;
     player.stamina = typeof ps.st === 'number' ? ps.st : player.stamina;
     player.weapon = ps.w;
@@ -3153,6 +3282,8 @@ function buildClientInput() {
     sd: !!mobileInput.satDown,
     sl: !!mobileInput.satLeft,
     sr: !!mobileInput.satRight,
+    tl: !!(keys['ArrowLeft'] || mobileInput.turretLeft),
+    tr: !!(keys['ArrowRight'] || mobileInput.turretRight),
     scopeToggle: !!(isBoundJustPressed('scope') || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle)),
     weaponToggle: !!(isBoundJustPressed('weaponSwitch') || (mobileInput.weaponToggle && !prevMobileInput.weaponToggle))
   };
@@ -3188,9 +3319,12 @@ function gameLoop() {
         backward: input.b || false,
         left: input.l || false,
         right: input.r || false,
-        boost: input.boost || false
+        boost: input.boost || false,
+        turretLeft: input.tl || false,
+        turretRight: input.tr || false
       };
       movePlayer(player, controls, dt);
+      updateTurretRotation(player, controls, dt);
 
       if (input.fire) {
         if (player.usingSatellite && !player.satelliteFiring) {
@@ -3231,9 +3365,12 @@ function gameLoop() {
         backward: isBoundDown('backward') || mobileInput.backward,
         left: isBoundDown('left') || mobileInput.left,
         right: isBoundDown('right') || mobileInput.right,
-        boost: mobileInput.boost || false
+        boost: mobileInput.boost || false,
+        turretLeft: !!(keys['ArrowLeft'] || mobileInput.turretLeft),
+        turretRight: !!(keys['ArrowRight'] || mobileInput.turretRight)
       };
       movePlayer(localPlayer, controls, dt);
+      updateTurretRotation(localPlayer, controls, dt);
 
       const firePressed = !!(isBoundDown('fire') || mobileInput.fire);
       const firePrev = !!((onlineBindings.fire && prevKeys[onlineBindings.fire]) || prevMobileInput.fire);
@@ -3293,6 +3430,7 @@ function gameLoop() {
           x: p.mesh ? p.mesh.position.x : 0,
           z: p.mesh ? p.mesh.position.z : 0,
           r: p.rotation || 0,
+          ty: p.turretYaw || 0,
           hp: p.hp,
           st: p.stamina,
           w: p.weapon,
@@ -3328,8 +3466,11 @@ function gameLoop() {
         backward: localInput.b,
         left: localInput.l,
         right: localInput.r,
-        boost: localInput.boost
+        boost: localInput.boost,
+        turretLeft: localInput.tl,
+        turretRight: localInput.tr
       }, dt);
+      updateTurretRotation(localPlayer, { turretLeft: localInput.tl, turretRight: localInput.tr }, dt);
 
       const firePressed = !!(isBoundDown('fire') || mobileInput.fire);
       const firePrev = !!((onlineBindings.fire && prevKeys[onlineBindings.fire]) || prevMobileInput.fire);
@@ -3427,6 +3568,13 @@ function updateLobbyUI() {
   container.innerHTML = '';
   document.getElementById('host-name-display').textContent = lobbyState.hostName || '-';
   document.getElementById('my-room-id').textContent = lobbyState.roomId || '...';
+  const optionInputs = Array.from(document.querySelectorAll('#game-options input'));
+  const optionsOwnerNote = document.getElementById('options-owner-note');
+  optionInputs.forEach((input) => {
+    input.disabled = !isHost;
+  });
+  optionsOwnerNote.textContent = isHost ? '仅房主可修改对局选项' : '当前对局选项由房主决定';
+  document.getElementById('game-options').style.opacity = isHost ? '1' : '0.72';
   
   for (const p of lobbyState.players) {
     const div = document.createElement('div');
@@ -3506,7 +3654,7 @@ async function joinRoomById(roomId) {
 }
 
 // ============== START GAME ==============
-function startGame(startCfg = null) {
+function startGame(startData = null) {
   showPageBack(false);
   stopRoomListPolling();
   if (isHost) unregisterRoomRegistry(lobbyState.roomId);
@@ -3519,8 +3667,8 @@ function startGame(startCfg = null) {
   }
   clearGameWorld();
   Object.keys(keys).forEach((key) => { keys[key] = false; prevKeys[key] = false; });
-  mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false };
-  prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false };
+  mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turretLeft: false, turretRight: false };
+  prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turretLeft: false, turretRight: false };
   gameStarted = true;
   gameStartTime = performance.now();
   const playerCount = Math.max(1, Math.min(4, lobbyState.players.length || 1));
@@ -3538,6 +3686,7 @@ function startGame(startCfg = null) {
     const tank = createTankMesh(p.color);
     scene.add(tank.group);
     p.mesh = tank.group;
+    p.turretPivot = tank.turretPivot;
     p.muzzle = tank.muzzle;
     
     // Spawn position
@@ -3552,13 +3701,16 @@ function startGame(startCfg = null) {
 
   localPlayerIndex = myIndex >= 0 ? myIndex : 0;
 
+  const cfg = startData && startData.cfg ? startData.cfg : startData;
+  const mapConfig = startData && startData.map ? startData.map : null;
+
   // Setup game options
-  if (startCfg) {
-    enableCollisionDamage = !!startCfg.collision;
-    enablePoisonCircle = !!startCfg.poison;
-    enableBulletSpread = !!startCfg.spread;
-    enableMines = !!startCfg.mines;
-    enableSatellite = !!startCfg.satellite;
+  if (cfg) {
+    enableCollisionDamage = !!cfg.collision;
+    enablePoisonCircle = !!cfg.poison;
+    enableBulletSpread = !!cfg.spread;
+    enableMines = !!cfg.mines;
+    enableSatellite = !!cfg.satellite;
   } else {
     enableCollisionDamage = document.getElementById('opt-collision').checked;
     enablePoisonCircle = document.getElementById('opt-poison').checked;
@@ -3568,11 +3720,23 @@ function startGame(startCfg = null) {
   }
 
   // Spawn environment
-  spawnRocks();
-  spawnHealthPacks();
-  spawnGrassPatches();
+  if (mapConfig) {
+    currentMapConfig = mapConfig;
+    spawnRocks(mapConfig.rocks || []);
+    spawnHealthPacks(mapConfig.healthPacks || []);
+    spawnGrassPatches(mapConfig.grassPatches || []);
+  } else {
+    spawnRocks();
+    spawnHealthPacks();
+    spawnGrassPatches();
+  }
   if (enablePoisonCircle) createPoisonCircle();
-  if (enableSatellite) spawnSatellitePickup();
+  if (enableSatellite) {
+    spawnSatellitePickup(mapConfig ? mapConfig.satellitePickup : null);
+  }
+  if (!mapConfig) {
+    currentMapConfig = buildCurrentMapConfig();
+  }
 
   // Hide lobby, show game
   document.getElementById('lobby').classList.add('hidden');
@@ -3584,6 +3748,7 @@ function startGame(startCfg = null) {
   // Start loop
   clock.start();
   gameLoop();
+  return currentMapConfig;
 }
 
 // ============== EVENT LISTENERS ==============
@@ -3606,7 +3771,7 @@ document.getElementById('btn-create').addEventListener('click', () => {
 });
 
 document.getElementById('btn-refresh-rooms').addEventListener('click', () => {
-  refreshRoomList();
+  refreshRoomList(true);
 });
 
 document.getElementById('btn-quick-join').addEventListener('click', () => {
@@ -3633,8 +3798,8 @@ document.getElementById('btn-start').addEventListener('click', () => {
       mines: document.getElementById('opt-mines').checked,
       satellite: document.getElementById('opt-satellite').checked
     };
-    startGame(cfg);
-    broadcast({ t: 'start', cfg, players: lobbyState.players });
+    const map = startGame({ cfg });
+    broadcast({ t: 'start', cfg, players: lobbyState.players, map });
   }
 });
 
