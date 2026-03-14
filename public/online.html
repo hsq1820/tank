@@ -961,6 +961,8 @@ function createSoundPlayer(path, poolSize = 4, volume = 1) {
 }
 
 const playDogAttackSound = createSoundPlayer('/resources/sounds/wtdd.WAV', 3, 0.9);
+const playDogDiedSound = createSoundPlayer('/resources/sounds/dogdied.WAV', 2, 0.9);
+const playTankDiedSound = createSoundPlayer('/resources/sounds/tankDied.WAV', 2, 0.9);
 const playMgSound = createSoundPlayer('/resources/sounds/jiqiang.WAV', 8, 0.7);
 const playShotgunSound = createSoundPlayer('/resources/sounds/xiandanqiang.WAV', 4, 0.85);
 const playCannonSound = createSoundPlayer('/resources/sounds/pao.WAV', 4, 0.9);
@@ -1570,6 +1572,7 @@ function createPlayerState(index) {
     x: 0, z: 0, rotation: 0,
     prevX: 0, prevZ: 0,
     prevForwardPressed: false,
+    prevBackwardPressed: false,
     input: { f: false, b: false, l: false, r: false, fire: false, mine: false, scope: false, sat: false, su: false, sd: false, sl: false, sr: false, tl: false, tr: false, scopeToggle: false, weaponToggle: false }
   };
 }
@@ -2084,31 +2087,35 @@ function getNeutralDogMaxHp(playerCount) {
 function createNeutralDog(playerCount = 1) {
   const maxHp = getNeutralDogMaxHp(playerCount);
   const group = new THREE.Group();
-  const spriteMat = new THREE.SpriteMaterial({ map: DOG_TEXTURES.full, transparent: true, depthWrite: false });
+  const spriteMat = new THREE.SpriteMaterial({ map: DOG_TEXTURES.full, transparent: true, depthWrite: false, depthTest: false });
   const sprite = new THREE.Sprite(spriteMat);
   sprite.center.set(0.78, 0.08);
   sprite.scale.set(9.6, 6.4, 1);
+  sprite.renderOrder = 1000;
   group.add(sprite);
 
   const flashSprite = new THREE.Sprite(new THREE.SpriteMaterial({
     map: DOG_TEXTURES.full,
     transparent: true,
     depthWrite: false,
+    depthTest: false,
     opacity: 0,
     color: 0xffffff,
     blending: THREE.AdditiveBlending
   }));
   flashSprite.center.copy(sprite.center);
   flashSprite.scale.set(9.9, 6.6, 1);
+  flashSprite.renderOrder = 1001;
   group.add(flashSprite);
   group.position.set(0, 0, 0);
   scene.add(group);
 
-  const shieldMat = new THREE.SpriteMaterial({ map: DOG_TEXTURES.shield, transparent: true, depthWrite: false });
+  const shieldMat = new THREE.SpriteMaterial({ map: DOG_TEXTURES.shield, transparent: true, depthWrite: false, depthTest: false });
   const shieldDrop = new THREE.Sprite(shieldMat);
   shieldDrop.center.set(0.5, 0.08);
   shieldDrop.scale.set(4.6, 4.8, 1);
   shieldDrop.visible = false;
+  shieldDrop.renderOrder = 1002;
   scene.add(shieldDrop);
 
   return {
@@ -2206,6 +2213,7 @@ function damageNeutralDog(amount, attackerIndex) {
 
   if (neutralDog.hp <= 0) {
     neutralDog.alive = false;
+    playDogDiedSound();
     updateNeutralDogVisuals();
     const creditedIndex = Number.isInteger(attackerIndex) ? attackerIndex : neutralDog.lastAttackerIndex;
     if (Number.isInteger(creditedIndex) && players[creditedIndex]) {
@@ -2282,6 +2290,9 @@ function syncNeutralDogFromState(state) {
   if (state.hp < neutralDog.hp) {
     neutralDog.hitFlashUntil = performance.now() + DOG_HIT_FLASH_MS;
   }
+  if (neutralDog.alive && state.alive === false) {
+    playDogDiedSound();
+  }
   neutralDog.hp = state.hp;
   neutralDog.alive = state.alive;
   neutralDog.shieldDropped = state.shieldDropped;
@@ -2315,6 +2326,7 @@ function applyDamage(player, dmg) {
   if (player.hp <= 0) {
     player.hp = 0;
     player.alive = false;
+    playTankDiedSound();
     if (player.mesh) {
       player.mesh.visible = false;
     }
@@ -3016,7 +3028,7 @@ function movePlayer(player, controls, dt) {
     turnSpeed *= SCOPE_TURN_MULT;
   }
 
-  player.boosting = (player.boosting || controls.boost) && !!controls.forward && player.stamina > 0;
+  player.boosting = (player.boosting || controls.boost) && (!!controls.forward || !!controls.backward) && player.stamina > 0;
   if (player.boosting) {
     player.stamina = Math.max(0, player.stamina - BOOST_STAMINA_DRAIN * dt);
     if (player.stamina <= 0) player.boosting = false;
@@ -3697,6 +3709,7 @@ function applyRemoteState(state) {
     const ps = state.p[i];
     const player = players[i];
     if (!player || !player.mesh) continue;
+    const wasAlive = player.alive;
 
     const isLocalClientPlayer = !isHost && i === localPlayerIndex;
     if (isLocalClientPlayer) {
@@ -3729,6 +3742,9 @@ function applyRemoteState(state) {
     player.buffType = ps.bf || player.buffType;
     player.weapon = ps.w;
     player.alive = ps.alive;
+    if (wasAlive && !player.alive) {
+      playTankDiedSound();
+    }
     player.hasSatellite = !!ps.hs;
     player.usingSatellite = ps.us;
     player.satelliteFiring = !!ps.sf;
@@ -3797,16 +3813,20 @@ function gameLoop() {
     for (const player of players) {
       if (!player.alive || player.index === localPlayerIndex) continue;
       const input = player.input || {};
-      if (input.f && !player.prevForwardPressed) {
+      const forwardJustPressed = input.f && !player.prevForwardPressed;
+      const backwardJustPressed = input.b && !player.prevBackwardPressed;
+      if (forwardJustPressed || backwardJustPressed) {
         const now = performance.now();
-        if (now - player.lastTapTime < DOUBLE_TAP_MS && player.lastTapKey === 'forward' && player.stamina >= BOOST_STAMINA_MIN_START) {
+        const tapKey = forwardJustPressed ? 'forward' : 'backward';
+        if (now - player.lastTapTime < DOUBLE_TAP_MS && player.lastTapKey === tapKey && player.stamina >= BOOST_STAMINA_MIN_START) {
           player.boosting = true;
           player.boostEndTime = now + BOOST_DURATION;
         }
-        player.lastTapKey = 'forward';
+        player.lastTapKey = tapKey;
         player.lastTapTime = now;
       }
       player.prevForwardPressed = !!input.f;
+      player.prevBackwardPressed = !!input.b;
       const controls = {
         forward: input.f || false,
         backward: input.b || false,
@@ -3890,8 +3910,12 @@ function gameLoop() {
 
       // Boost detection
       const now = performance.now();
-      const tapKey = onlineBindings.forward;
-      if (tapKey && keys[tapKey] && !prevKeys[tapKey]) {
+      const forwardTapKey = onlineBindings.forward;
+      const backwardTapKey = onlineBindings.backward;
+      const tapKey = (forwardTapKey && keys[forwardTapKey] && !prevKeys[forwardTapKey])
+        ? 'forward'
+        : ((backwardTapKey && keys[backwardTapKey] && !prevKeys[backwardTapKey]) ? 'backward' : null);
+      if (tapKey) {
         if (now - localPlayer.lastTapTime < DOUBLE_TAP_MS && localPlayer.lastTapKey === tapKey && localPlayer.stamina >= BOOST_STAMINA_MIN_START) {
           localPlayer.boosting = true;
           localPlayer.boostEndTime = now + BOOST_DURATION;
@@ -3961,16 +3985,20 @@ function gameLoop() {
     const localPlayer = players[localPlayerIndex];
     const localInput = buildClientInput();
     if (localPlayer && localPlayer.alive) {
-      if (localInput.f && !localPlayer.prevForwardPressed) {
+      const localForwardTap = localInput.f && !localPlayer.prevForwardPressed;
+      const localBackwardTap = localInput.b && !localPlayer.prevBackwardPressed;
+      if (localForwardTap || localBackwardTap) {
         const now = performance.now();
-        if (now - localPlayer.lastTapTime < DOUBLE_TAP_MS && localPlayer.lastTapKey === 'forward' && localPlayer.stamina >= BOOST_STAMINA_MIN_START) {
+        const tapKey = localForwardTap ? 'forward' : 'backward';
+        if (now - localPlayer.lastTapTime < DOUBLE_TAP_MS && localPlayer.lastTapKey === tapKey && localPlayer.stamina >= BOOST_STAMINA_MIN_START) {
           localPlayer.boosting = true;
           localPlayer.boostEndTime = now + BOOST_DURATION;
         }
-        localPlayer.lastTapKey = 'forward';
+        localPlayer.lastTapKey = tapKey;
         localPlayer.lastTapTime = now;
       }
       localPlayer.prevForwardPressed = !!localInput.f;
+      localPlayer.prevBackwardPressed = !!localInput.b;
 
       movePlayer(localPlayer, {
         forward: localInput.f,

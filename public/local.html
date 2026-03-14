@@ -312,7 +312,9 @@
         }
 
         .p-info {
-            width: calc(50% - 35px);
+            width: fit-content;
+            min-width: 260px;
+            max-width: calc(50% - 35px);
             color: var(--text-primary);
             background: var(--surface-hud);
             border: 1px solid var(--border-soft);
@@ -724,6 +726,8 @@
         }
 
         const playDogAttackSound = createSoundPlayer('/resources/sounds/wtdd.WAV', 3, 0.9);
+        const playDogDiedSound = createSoundPlayer('/resources/sounds/dogdied.WAV', 2, 0.9);
+        const playTankDiedSound = createSoundPlayer('/resources/sounds/tankDied.WAV', 2, 0.9);
         const playMgSound = createSoundPlayer('/resources/sounds/jiqiang.WAV', 8, 0.7);
         const playShotgunSound = createSoundPlayer('/resources/sounds/xiandanqiang.WAV', 4, 0.85);
         const playCannonSound = createSoundPlayer('/resources/sounds/pao.WAV', 4, 0.9);
@@ -1332,9 +1336,10 @@
         function createNeutralDog(playerCount = 2) {
             const maxHp = getNeutralDogMaxHp(playerCount);
             const group = new THREE.Group();
-            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: DOG_TEXTURES.full, transparent: true, depthWrite: false }));
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: DOG_TEXTURES.full, transparent: true, depthWrite: false, depthTest: false }));
             sprite.center.set(0.78, 0.08);
             sprite.scale.set(9.6, 6.4, 1);
+            sprite.renderOrder = 1000;
             group.add(sprite);
 
             const flashSprite = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -1347,14 +1352,16 @@
             }));
             flashSprite.center.copy(sprite.center);
             flashSprite.scale.set(9.9, 6.6, 1);
+            flashSprite.renderOrder = 1001;
             group.add(flashSprite);
             group.position.set(0, 0, 0);
             scene.add(group);
 
-            const shieldDrop = new THREE.Sprite(new THREE.SpriteMaterial({ map: DOG_TEXTURES.shield, transparent: true, depthWrite: false }));
+            const shieldDrop = new THREE.Sprite(new THREE.SpriteMaterial({ map: DOG_TEXTURES.shield, transparent: true, depthWrite: false, depthTest: false }));
             shieldDrop.center.set(0.5, 0.08);
             shieldDrop.scale.set(4.6, 4.8, 1);
             shieldDrop.visible = false;
+            shieldDrop.renderOrder = 1002;
             scene.add(shieldDrop);
 
             return {
@@ -1447,6 +1454,7 @@
             }
             if (neutralDog.hp <= 0) {
                 neutralDog.alive = false;
+                playDogDiedSound();
                 updateNeutralDogVisuals();
                 const creditedKey = attackerKey || neutralDog.lastAttackerKey;
                 if (creditedKey && players[creditedKey]) {
@@ -1569,8 +1577,9 @@
             player.hitT = 4;
             player.shake = 0.25;
             updatePlayerHud(playerKey);
-            if (player.hp <= 0) {
-                gameStarted = false;
+                if (player.hp <= 0) {
+                    playTankDiedSound();
+                    gameStarted = false;
                 document.getElementById('win-text').innerText = (playerKey === 'p1' ? '蓝色坦克' : '红色坦克') + ' 被摧毁！';
                 document.getElementById('winner-msg').style.display = 'block';
                 document.getElementById('control-guide').style.display = 'none';
@@ -2203,7 +2212,7 @@
             if (!player._prevPos) player._prevPos = new THREE.Vector3();
             player._prevPos.copy(player.mesh.position);
             player._prevRotY = player.mesh.rotation.y;
-            player.boosting = player.boosting && !!controls.forward && player.stamina > 0;
+            player.boosting = player.boosting && (!!controls.forward || !!controls.backward) && player.stamina > 0;
             if (player.boosting) {
                 player.stamina = Math.max(0, player.stamina - BOOST_STAMINA_DRAIN * deltaSeconds);
                 if (player.stamina <= 0) player.boosting = false;
