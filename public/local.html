@@ -1306,12 +1306,17 @@
 
         function updateNeutralDogVisuals() {
             if (!neutralDog) return;
+            const shieldAnimActive = neutralDog.shieldDropped && neutralDog.shieldDropAt && (Date.now() - neutralDog.shieldDropAt < DOG_SHIELD_DROP_ANIM_MS);
             neutralDog.sprite.material.map = neutralDog.shieldDropped ? DOG_TEXTURES.noShield : DOG_TEXTURES.full;
             neutralDog.sprite.material.needsUpdate = true;
             neutralDog.group.visible = neutralDog.alive;
-            neutralDog.shieldDrop.visible = neutralDog.shieldDropped;
-            if (neutralDog.shieldDropped) {
-                neutralDog.shieldDrop.position.set(neutralDog.shieldDropX, 0.1, neutralDog.shieldDropZ);
+            neutralDog.shieldDrop.visible = shieldAnimActive;
+            if (shieldAnimActive) {
+                const t = Math.min(1, (Date.now() - neutralDog.shieldDropAt) / DOG_SHIELD_DROP_ANIM_MS);
+                neutralDog.shieldDrop.position.set(neutralDog.shieldDropX, 0.12 + t * 0.65, neutralDog.shieldDropZ + t * 0.35);
+                neutralDog.shieldDrop.material.opacity = 1 - t * 0.9;
+            } else {
+                neutralDog.shieldDrop.material.opacity = 1;
             }
         }
 
@@ -1341,6 +1346,7 @@
             }
             if (!neutralDog.shieldDropped && neutralDog.hp <= DOG_SHIELD_BREAK_HP) {
                 neutralDog.shieldDropped = true;
+                neutralDog.shieldDropAt = Date.now();
                 neutralDog.shieldDropX = neutralDog.group.position.x + 2.1;
                 neutralDog.shieldDropZ = neutralDog.group.position.z + 0.8;
                 updateNeutralDogVisuals();
@@ -1409,6 +1415,7 @@
         function updatePlayerHud(playerKey) {
             const player = players[playerKey];
             hpFillEls[playerKey].style.width = `${Math.max(0, player.hp)}%`;
+            hpFillEls[playerKey].style.background = getHpFillColor(player.hp);
             hpTextEls[playerKey].textContent = `HP ${Math.ceil(player.hp)}`;
             weaponTextEls[playerKey].textContent = `武器：${WEAPONS[player.weapon].name}`;
             staminaFillEls[playerKey].style.width = `${Math.max(0, player.stamina)}%`;
@@ -1430,6 +1437,12 @@
             banner.classList.add('show');
             if (announcementHideTimer) clearTimeout(announcementHideTimer);
             announcementHideTimer = setTimeout(() => banner.classList.remove('show'), duration);
+        }
+
+        function getHpFillColor(hp) {
+            if (hp >= 60) return 'linear-gradient(90deg, #34d399, #10b981)';
+            if (hp >= 35) return 'linear-gradient(90deg, #facc15, #f59e0b)';
+            return 'linear-gradient(90deg, #fb7185, #ef4444)';
         }
 
         function updateAllHud() {
@@ -2074,11 +2087,12 @@
             const moveSpeed = player.speed * effectiveSpeedMult * deltaSeconds;
             const backSpeed = moveSpeed * 0.75;
             const turnSpeed = 2.7 * (player.scoping ? SCOPE_TURN_MULT : 1) * deltaSeconds;
+            const reversing = !!keys[controls.backward] && !keys[controls.forward];
 
             if (keys[controls.forward]) player.mesh.translateZ(-moveSpeed);
             if (keys[controls.backward]) player.mesh.translateZ(backSpeed);
-            if (keys[controls.left]) player.mesh.rotation.y += turnSpeed;
-            if (keys[controls.right]) player.mesh.rotation.y -= turnSpeed;
+            if (keys[controls.left]) player.mesh.rotation.y += (reversing ? -1 : 1) * turnSpeed;
+            if (keys[controls.right]) player.mesh.rotation.y -= (reversing ? -1 : 1) * turnSpeed;
             if (keys[fireKey]) fire(playerKey);
 
             keepTankInBounds(player);
@@ -2339,6 +2353,22 @@
                 minimapCtx.lineTo(x + 4, y);
                 minimapCtx.moveTo(x, y - 4);
                 minimapCtx.lineTo(x, y + 4);
+                minimapCtx.stroke();
+            }
+
+            if (neutralDogEnabled && neutralDog && neutralDog.alive) {
+                minimapCtx.fillStyle = '#d08b42';
+                minimapCtx.beginPath();
+                minimapCtx.arc(
+                    centerX + (neutralDog.group.position.x / MAP_HALF) * MINIMAP_RADIUS,
+                    centerY + (neutralDog.group.position.z / MAP_HALF) * MINIMAP_RADIUS,
+                    4.5,
+                    0,
+                    Math.PI * 2
+                );
+                minimapCtx.fill();
+                minimapCtx.strokeStyle = '#fff2c1';
+                minimapCtx.lineWidth = 1.5;
                 minimapCtx.stroke();
             }
 

@@ -1488,22 +1488,16 @@ function setupMobileControls() {
     const player = players[localPlayerIndex];
     if (!player || !player.usingSatellite || player.satelliteFiring) return;
 
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    const cx = w / 2;
-    const cy = h / 2;
-    const mapRadiusPx = Math.min(w, h) * 0.42;
-
-    let dx = e.clientX - cx;
-    let dy = e.clientY - cy;
-    const d = Math.hypot(dx, dy);
-    if (d > mapRadiusPx && d > 0.001) {
-      dx = dx / d * mapRadiusPx;
-      dy = dy / d * mapRadiusPx;
+    const rect = satelliteCanvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -(((e.clientY - rect.top) / rect.height) * 2 - 1)
+    );
+    satelliteRaycaster.setFromCamera(ndc, camera);
+    if (satelliteRaycaster.ray.intersectPlane(satelliteGroundPlane, satelliteGroundHit)) {
+      player.satelliteTarget.x = THREE.MathUtils.clamp(satelliteGroundHit.x, -MAP_HALF + 10, MAP_HALF - 10);
+      player.satelliteTarget.z = THREE.MathUtils.clamp(satelliteGroundHit.z, -MAP_HALF + 10, MAP_HALF - 10);
     }
-
-    player.satelliteTarget.x = THREE.MathUtils.clamp((dx / mapRadiusPx) * MAP_HALF, -MAP_HALF + 10, MAP_HALF - 10);
-    player.satelliteTarget.z = THREE.MathUtils.clamp((dy / mapRadiusPx) * MAP_HALF, -MAP_HALF + 10, MAP_HALF - 10);
     sendImmediateClientInput();
   });
 }
@@ -2243,6 +2237,12 @@ function getPlayerStatusText(player) {
   return parts.length ? parts.join(' · ') : '状态：无';
 }
 
+function getHpFillColor(hp) {
+  if (hp >= 60) return 'linear-gradient(90deg, #34d399, #10b981)';
+  if (hp >= 35) return 'linear-gradient(90deg, #facc15, #f59e0b)';
+  return 'linear-gradient(90deg, #fb7185, #ef4444)';
+}
+
 function showAnnouncement(text, duration = 3600) {
   const banner = document.getElementById('announcement-banner');
   banner.textContent = text;
@@ -2923,8 +2923,9 @@ function movePlayer(player, controls, dt) {
   if (player.boosting) speed *= BOOST_MULTIPLIER;
 
   // Turning
-  if (controls.left) player.mesh.rotation.y += turnSpeed * dt;
-  if (controls.right) player.mesh.rotation.y -= turnSpeed * dt;
+  const reversing = !!controls.backward && !controls.forward;
+  if (controls.left) player.mesh.rotation.y += (reversing ? -1 : 1) * turnSpeed * dt;
+  if (controls.right) player.mesh.rotation.y -= (reversing ? -1 : 1) * turnSpeed * dt;
 
   // Forward/backward (match local mode orientation)
   const moveSpeed = speed * dt;
@@ -3099,7 +3100,13 @@ function drawSatelliteOverlay(player) {
   // Keep blast radius scale identical to local mode.
   const blastRadiusPx = (SATELLITE_RADIUS / (MAP_HALF * 2)) * Math.min(w, h);
 
-  const worldToScreen = (x, z) => ({ x: cx + x * mapScale, y: cy + z * mapScale });
+  const worldToScreen = (x, z) => {
+    const projected = new THREE.Vector3(x, 0, z).project(camera);
+    return {
+      x: (projected.x * 0.5 + 0.5) * w,
+      y: (-projected.y * 0.5 + 0.5) * h
+    };
+  };
   const target = player.satelliteTarget;
   const targetScreen = worldToScreen(target.x, target.z);
 
@@ -3148,6 +3155,17 @@ function drawSatelliteOverlay(player) {
     satelliteCtx.beginPath();
     satelliteCtx.arc(p.x, p.y, 4.5, 0, Math.PI * 2);
     satelliteCtx.fill();
+  }
+
+  if (enableNeutralDog && neutralDog && neutralDog.alive) {
+    const p = worldToScreen(neutralDog.group.position.x, neutralDog.group.position.z);
+    satelliteCtx.fillStyle = '#d08b42';
+    satelliteCtx.beginPath();
+    satelliteCtx.arc(p.x, p.y, 5.2, 0, Math.PI * 2);
+    satelliteCtx.fill();
+    satelliteCtx.strokeStyle = '#fff2c1';
+    satelliteCtx.lineWidth = 1.5;
+    satelliteCtx.stroke();
   }
 
   if (localPlayerIndex >= 0 && players[localPlayerIndex] && players[localPlayerIndex].mesh) {
@@ -3272,6 +3290,16 @@ function drawMinimap() {
     }
   }
 
+  if (enableNeutralDog && neutralDog && neutralDog.alive) {
+    ctx.fillStyle = '#d08b42';
+    ctx.beginPath();
+    ctx.arc(w/2 + neutralDog.group.position.x * scale, h/2 + neutralDog.group.position.z * scale, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff2c1';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
   // Players
   if (localPlayerIndex >= 0 && players[localPlayerIndex] && players[localPlayerIndex].mesh) {
     const localPos = players[localPlayerIndex].mesh.position;
@@ -3317,6 +3345,7 @@ function updateHUD() {
   info.querySelector('.player-dot').style.backgroundColor = '#' + player.color.toString(16).padStart(6, '0');
   info.querySelector('.player-name').textContent = player.name;
   info.querySelector('.hp-fill').style.width = player.hp + '%';
+  info.querySelector('.hp-fill').style.background = getHpFillColor(player.hp);
   info.querySelector('.stamina-fill').style.width = Math.max(0, player.stamina) + '%';
   info.querySelector('.stamina-text').textContent = Math.round(Math.max(0, player.stamina)) + '%';
   info.querySelector('.weapon span').textContent = WEAPONS[player.weapon].name;
@@ -3815,6 +3844,7 @@ function gameLoop() {
           z: neutralDog.group.position.z,
           hp: neutralDog.hp,
           shieldDropped: neutralDog.shieldDropped,
+          sda: neutralDog.shieldDropAt || 0,
           sdx: neutralDog.shieldDropX,
           sdz: neutralDog.shieldDropZ
         } : { enabled: false }
