@@ -1305,9 +1305,21 @@
         function createNeutralDog() {
             const group = new THREE.Group();
             const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: DOG_TEXTURES.full, transparent: true, depthWrite: false }));
-            sprite.center.set(0.5, 0.08);
+            sprite.center.set(0.78, 0.08);
             sprite.scale.set(9.6, 6.4, 1);
             group.add(sprite);
+
+            const flashSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: DOG_TEXTURES.full,
+                transparent: true,
+                depthWrite: false,
+                opacity: 0,
+                color: 0xffffff,
+                blending: THREE.AdditiveBlending
+            }));
+            flashSprite.center.copy(sprite.center);
+            flashSprite.scale.set(9.9, 6.6, 1);
+            group.add(flashSprite);
             group.position.set(0, 0, 0);
             scene.add(group);
 
@@ -1320,6 +1332,7 @@
             return {
                 group,
                 sprite,
+                flashSprite,
                 shieldDrop,
                 hp: DOG_MAX_HP,
                 alive: true,
@@ -1330,6 +1343,7 @@
                 lastAttackAt: 0,
                 attackWindupUntil: 0,
                 attackWindupStartAt: 0,
+                hitFlashUntil: 0,
                 shieldDropAt: 0,
                 shieldDropX: 0,
                 shieldDropZ: 0
@@ -1343,13 +1357,19 @@
             if (attackActive) {
                 const phase = Math.min(1, Math.max(0, (now - neutralDog.attackWindupStartAt) / DOG_ATTACK_WINDUP));
                 const angle = phase < 0.5
-                    ? THREE.MathUtils.lerp(0, DOG_ATTACK_SWING_RAD, phase * 2)
-                    : THREE.MathUtils.lerp(DOG_ATTACK_SWING_RAD, -DOG_ATTACK_SWING_RAD, (phase - 0.5) * 2);
+                    ? THREE.MathUtils.lerp(0, -DOG_ATTACK_SWING_RAD, phase * 2)
+                    : THREE.MathUtils.lerp(-DOG_ATTACK_SWING_RAD, DOG_ATTACK_SWING_RAD, (phase - 0.5) * 2);
                 neutralDog.sprite.material.rotation = angle;
             } else {
                 neutralDog.sprite.material.rotation *= 0.78;
                 if (Math.abs(neutralDog.sprite.material.rotation) < 0.002) neutralDog.sprite.material.rotation = 0;
             }
+            const flashActive = neutralDog.hitFlashUntil && now < neutralDog.hitFlashUntil;
+            neutralDog.flashSprite.material.map = neutralDog.shieldDropped ? DOG_TEXTURES.noShield : DOG_TEXTURES.full;
+            neutralDog.flashSprite.material.needsUpdate = true;
+            neutralDog.flashSprite.material.rotation = neutralDog.sprite.material.rotation;
+            neutralDog.flashSprite.visible = flashActive && neutralDog.alive;
+            neutralDog.flashSprite.material.opacity = flashActive ? Math.max(0, (neutralDog.hitFlashUntil - now) / DOG_HIT_FLASH_MS) * 0.9 : 0;
             const shieldAnimActive = neutralDog.shieldDropped && neutralDog.shieldDropAt && (Date.now() - neutralDog.shieldDropAt < DOG_SHIELD_DROP_ANIM_MS);
             neutralDog.sprite.material.map = neutralDog.shieldDropped ? DOG_TEXTURES.noShield : DOG_TEXTURES.full;
             neutralDog.sprite.material.needsUpdate = true;
@@ -1384,6 +1404,7 @@
             if (!neutralDogEnabled || !neutralDog || !neutralDog.alive || amount <= 0) return;
             neutralDog.hp = Math.max(0, neutralDog.hp - amount);
             neutralDog.lastDamagedAt = Date.now();
+            neutralDog.hitFlashUntil = Date.now() + DOG_HIT_FLASH_MS;
             if (attackerKey) {
                 neutralDog.targetKey = attackerKey;
                 neutralDog.lastAttackerKey = attackerKey;
@@ -1434,10 +1455,14 @@
             const dist = Math.hypot(dx, dz);
 
             if (neutralDog.attackWindupUntil) {
+                if (dist > 0.001 && dist > DOG_ATTACK_RANGE * 0.7) {
+                    neutralDog.group.position.x += (dx / dist) * DOG_MOVE_SPEED * 0.6 * deltaSeconds;
+                    neutralDog.group.position.z += (dz / dist) * DOG_MOVE_SPEED * 0.6 * deltaSeconds;
+                }
                 if (now >= neutralDog.attackWindupUntil) {
                     neutralDog.attackWindupUntil = 0;
                     neutralDog.lastAttackAt = now;
-                    if (dist <= DOG_ATTACK_RANGE + 0.6) {
+                    if (dist <= DOG_ATTACK_RANGE + 1.6) {
                         applyDamage(neutralDog.targetKey, DOG_ATTACK_DAMAGE);
                     }
                 }
