@@ -901,6 +901,7 @@ const DOG_REGEN_RATE = 2;
 const DOG_SHIELD_BREAK_HP = 100;
 const DOG_HIT_RADIUS = 2.8;
 const DOG_ATTACK_RANGE = 4.1;
+const DOG_SHIELD_DROP_ANIM_MS = 1200;
 const PLAYER_REGEN_BUFF_DELAY = 5000;
 const PLAYER_REGEN_BUFF_RATE = 1;
 
@@ -941,6 +942,9 @@ let recentPredictedLocalShots = [];
 let neutralDog = null;
 let enableNeutralDog = false;
 let announcementHideTimer = 0;
+const satelliteRaycaster = new THREE.Raycaster();
+const satelliteGroundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const satelliteGroundHit = new THREE.Vector3();
 
 let peer = null;
 let connections = [];
@@ -2065,6 +2069,7 @@ function createNeutralDog() {
     lastDamagedAt: performance.now(),
     lastAttackAt: 0,
     attackWindupUntil: 0,
+    shieldDropAt: 0,
     shieldDropX: 0,
     shieldDropZ: 0
   };
@@ -2077,12 +2082,17 @@ function spawnNeutralDog() {
 
 function updateNeutralDogVisuals() {
   if (!neutralDog) return;
+  const showShieldDrop = neutralDog.shieldDropped && neutralDog.shieldDropAt && (Date.now() - neutralDog.shieldDropAt < DOG_SHIELD_DROP_ANIM_MS);
   neutralDog.sprite.material.map = neutralDog.shieldDropped ? DOG_TEXTURES.noShield : DOG_TEXTURES.full;
   neutralDog.sprite.material.needsUpdate = true;
   neutralDog.group.visible = neutralDog.alive;
-  neutralDog.shieldDrop.visible = neutralDog.shieldDropped;
-  if (neutralDog.shieldDropped) {
-    neutralDog.shieldDrop.position.set(neutralDog.shieldDropX, 0.1, neutralDog.shieldDropZ);
+  neutralDog.shieldDrop.visible = showShieldDrop;
+  if (showShieldDrop) {
+    const t = Math.min(1, (Date.now() - neutralDog.shieldDropAt) / DOG_SHIELD_DROP_ANIM_MS);
+    neutralDog.shieldDrop.position.set(neutralDog.shieldDropX, 0.15 + t * 0.6, neutralDog.shieldDropZ + t * 0.4);
+    neutralDog.shieldDrop.material.opacity = 1 - t * 0.85;
+  } else {
+    neutralDog.shieldDrop.material.opacity = 1;
   }
 }
 
@@ -2111,6 +2121,7 @@ function damageNeutralDog(amount, attackerIndex) {
 
   if (!neutralDog.shieldDropped && neutralDog.hp <= DOG_SHIELD_BREAK_HP) {
     neutralDog.shieldDropped = true;
+    neutralDog.shieldDropAt = Date.now();
     neutralDog.shieldDropX = neutralDog.group.position.x + 2.1;
     neutralDog.shieldDropZ = neutralDog.group.position.z + 0.8;
     updateNeutralDogVisuals();
@@ -2188,6 +2199,7 @@ function syncNeutralDogFromState(state) {
   neutralDog.hp = state.hp;
   neutralDog.alive = state.alive;
   neutralDog.shieldDropped = state.shieldDropped;
+  neutralDog.shieldDropAt = state.sda || 0;
   neutralDog.group.position.x += (state.x - neutralDog.group.position.x) * 0.3;
   neutralDog.group.position.z += (state.z - neutralDog.group.position.z) * 0.3;
   neutralDog.shieldDropX = state.sdx;
@@ -2973,9 +2985,9 @@ function renderView() {
     camera.updateProjectionMatrix();
     const turretWorldQuat = new THREE.Quaternion();
     player.muzzle.getWorldQuaternion(turretWorldQuat);
-    const offset = new THREE.Vector3(0, 5, 12).applyQuaternion(turretWorldQuat);
+    const offset = new THREE.Vector3(0, 3.8, 10.5).applyQuaternion(turretWorldQuat);
     camera.position.set(pos.x + offset.x, offset.y, pos.z + offset.z);
-    const lookTarget = pos.clone().add(new THREE.Vector3(0, 1, -1).applyQuaternion(turretWorldQuat).multiplyScalar(18));
+    const lookTarget = pos.clone().add(new THREE.Vector3(0, 1.35, -5.5).applyQuaternion(turretWorldQuat));
     camera.lookAt(lookTarget);
     scopeCanvas.classList.remove('active');
     if (scopeCanvas) {
