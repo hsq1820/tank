@@ -1441,6 +1441,7 @@
             neutralDog.hp = Math.max(0, neutralDog.hp - amount);
             neutralDog.lastDamagedAt = Date.now();
             neutralDog.hitFlashUntil = Date.now() + DOG_HIT_FLASH_MS;
+            updateNeutralDogVisuals();
             if (attackerKey) {
                 neutralDog.targetKey = attackerKey;
                 neutralDog.lastAttackerKey = attackerKey;
@@ -1477,6 +1478,7 @@
 
         function updateNeutralDog(now, deltaSeconds) {
             if (!neutralDogEnabled || !neutralDog || !neutralDog.alive) return;
+            updateNeutralDogVisuals();
             if (now - neutralDog.lastDamagedAt >= DOG_REGEN_DELAY && neutralDog.hp < neutralDog.maxHp) {
                 neutralDog.hp = Math.min(neutralDog.maxHp, neutralDog.hp + DOG_REGEN_RATE * deltaSeconds);
             }

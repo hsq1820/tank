@@ -2198,6 +2198,7 @@ function damageNeutralDog(amount, attackerIndex) {
   neutralDog.hp = Math.max(0, neutralDog.hp - amount);
   neutralDog.lastDamagedAt = performance.now();
   neutralDog.hitFlashUntil = performance.now() + DOG_HIT_FLASH_MS;
+  updateNeutralDogVisuals();
   if (Number.isInteger(attackerIndex)) {
     neutralDog.targetIndex = attackerIndex;
     neutralDog.lastAttackerIndex = attackerIndex;
@@ -2237,6 +2238,7 @@ function updatePlayerBuffs(dt) {
 
 function updateNeutralDog(dt) {
   if (!enableNeutralDog || !neutralDog || !neutralDog.alive) return;
+  updateNeutralDogVisuals();
   const now = performance.now();
   if (now - neutralDog.lastDamagedAt >= DOG_REGEN_DELAY && neutralDog.hp < neutralDog.maxHp) {
     neutralDog.hp = Math.min(neutralDog.maxHp, neutralDog.hp + DOG_REGEN_RATE * dt);
@@ -3060,6 +3062,7 @@ function movePlayer(player, controls, dt) {
 
 // ============== RENDERING ==============
 function renderView() {
+  if (enableNeutralDog && neutralDog) updateNeutralDogVisuals();
   const satellitePad = document.getElementById('satellite-pad');
   if (localPlayerIndex < 0 || !players[localPlayerIndex] || !players[localPlayerIndex].alive) {
     camera.position.set(0, 50, 50);
