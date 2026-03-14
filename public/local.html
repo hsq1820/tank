@@ -609,8 +609,8 @@
     <script type="module">
         import * as THREE from 'three';
 
-        const MAP_HALF = 120;
-        const MAP_RADIUS = 116;
+        const MAP_HALF = 200;
+        const MAP_RADIUS = 200;
         const TANK_RADIUS = 1.4;
         const MINE_RADIUS = 0.8;
         const MINE_DAMAGE = 25;
@@ -640,7 +640,8 @@
         const STAMINA_RECOVERY = 2;
         const BOOST_STAMINA_DRAIN = 24;
         const BOOST_STAMINA_MIN_START = 10;
-        const DOG_MAX_HP = 200;
+        const DOG_BASE_HP = 300;
+        const DOG_HP_PER_EXTRA_PLAYER = 80;
         const DOG_MOVE_SPEED = 16;
         const DOG_ATTACK_DAMAGE = 25;
         const DOG_ATTACK_CD = 5000;
@@ -652,6 +653,7 @@
         const DOG_ATTACK_RANGE = 4.1;
         const DOG_SHIELD_DROP_ANIM_MS = 1200;
         const DOG_ATTACK_SWING_RAD = THREE.MathUtils.degToRad(15);
+        const DOG_HIT_FLASH_MS = 180;
         const PLAYER_REGEN_BUFF_DELAY = 5000;
         const PLAYER_REGEN_BUFF_RATE = 1;
 
@@ -690,7 +692,7 @@
 
         const WEAPONS = {
             mg: { name: '机枪', dmg: 1, cd: 50, speed: 120, color: 0xff4400, size: 0.15 },
-            shotgun: { name: '霰弹枪', dmg: 1, cd: 950, speed: 68, color: 0xffe08a, size: 0.09, pellets: 40, spread: Math.PI * 2 / 3, maxLife: 0.26 },
+            shotgun: { name: '霰弹枪', dmg: 1, cd: 1800, speed: 68, color: 0xffe08a, size: 0.09, pellets: 40, spread: Math.PI * 2 / 3, maxLife: 0.26 },
             cannon: { name: '加农炮', dmg: 25, cd: 1800, speed: 45, color: 0xffaa00, size: 0.4 }
         };
         const WEAPON_ORDER = ['mg', 'shotgun', 'cannon'];
@@ -989,16 +991,37 @@
             return getAllBoundCodes().includes(code) || code === 'Escape';
         }
 
+        function createCircularGridHelper(radius, rings = 5, spokes = 16) {
+            const group = new THREE.Group();
+            const ringMat = new THREE.LineBasicMaterial({ color: 0x6a9360, transparent: true, opacity: 0.65 });
+            const spokeMat = new THREE.LineBasicMaterial({ color: 0x7da26f, transparent: true, opacity: 0.42 });
+            const segments = 96;
+            for (let i = 1; i <= rings; i++) {
+                const r = radius * (i / rings);
+                const pts = [];
+                for (let s = 0; s <= segments; s++) {
+                    const a = (s / segments) * Math.PI * 2;
+                    pts.push(new THREE.Vector3(Math.cos(a) * r, 0.05, Math.sin(a) * r));
+                }
+                group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ringMat));
+            }
+            for (let i = 0; i < spokes; i++) {
+                const a = (i / spokes) * Math.PI * 2;
+                const pts = [new THREE.Vector3(0, 0.05, 0), new THREE.Vector3(Math.cos(a) * radius, 0.05, Math.sin(a) * radius)];
+                group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), spokeMat));
+            }
+            return group;
+        }
+
         const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(MAP_HALF * 2, MAP_HALF * 2),
+            new THREE.CircleGeometry(MAP_RADIUS, 96),
             new THREE.MeshStandardMaterial({ color: 0x7fbe63 })
         );
         floor.rotation.x = -Math.PI / 2;
         floor.receiveShadow = true;
         scene.add(floor);
 
-        const grid = new THREE.GridHelper(MAP_HALF * 2, 48, 0x6a9360, 0x7da26f);
-        scene.add(grid);
+        scene.add(createCircularGridHelper(MAP_RADIUS));
 
         const hemi = new THREE.HemisphereLight(0xf4fbff, 0x8eb070, 0.55);
         hemi.layers.enableAll();
@@ -1302,7 +1325,12 @@
             neutralDog = null;
         }
 
-        function createNeutralDog() {
+        function getNeutralDogMaxHp(playerCount) {
+            return DOG_BASE_HP + Math.max(0, playerCount - 1) * DOG_HP_PER_EXTRA_PLAYER;
+        }
+
+        function createNeutralDog(playerCount = 2) {
+            const maxHp = getNeutralDogMaxHp(playerCount);
             const group = new THREE.Group();
             const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: DOG_TEXTURES.full, transparent: true, depthWrite: false }));
             sprite.center.set(0.78, 0.08);
@@ -1334,7 +1362,8 @@
                 sprite,
                 flashSprite,
                 shieldDrop,
-                hp: DOG_MAX_HP,
+                hp: maxHp,
+                maxHp,
                 alive: true,
                 shieldDropped: false,
                 targetKey: null,
@@ -1386,7 +1415,7 @@
 
         function spawnNeutralDog() {
             clearNeutralDog();
-            neutralDog = createNeutralDog();
+            neutralDog = createNeutralDog(2);
         }
 
         function grantDogBlessing(playerKey) {
@@ -1409,7 +1438,7 @@
                 neutralDog.targetKey = attackerKey;
                 neutralDog.lastAttackerKey = attackerKey;
             }
-            if (!neutralDog.shieldDropped && neutralDog.hp <= DOG_SHIELD_BREAK_HP) {
+            if (!neutralDog.shieldDropped && neutralDog.hp <= neutralDog.maxHp / 2) {
                 neutralDog.shieldDropped = true;
                 neutralDog.shieldDropAt = Date.now();
                 neutralDog.shieldDropX = neutralDog.group.position.x + 2.1;
@@ -1440,8 +1469,8 @@
 
         function updateNeutralDog(now, deltaSeconds) {
             if (!neutralDogEnabled || !neutralDog || !neutralDog.alive) return;
-            if (now - neutralDog.lastDamagedAt >= DOG_REGEN_DELAY && neutralDog.hp < DOG_MAX_HP) {
-                neutralDog.hp = Math.min(DOG_MAX_HP, neutralDog.hp + DOG_REGEN_RATE * deltaSeconds);
+            if (now - neutralDog.lastDamagedAt >= DOG_REGEN_DELAY && neutralDog.hp < neutralDog.maxHp) {
+                neutralDog.hp = Math.min(neutralDog.maxHp, neutralDog.hp + DOG_REGEN_RATE * deltaSeconds);
             }
 
             const target = neutralDog.targetKey ? players[neutralDog.targetKey] : null;
@@ -2093,21 +2122,21 @@
             if (!poisonCircleEnabled) return;
             const elapsed = (now - poisonStartTime) / 1000;
             safeRadius = MAX_RADIUS * Math.max(0, 1 - elapsed / POISON_DURATION);
-            updatePoisonCircleGeometry(safeRadius);
+            updatePoisonCircleGeometry(Math.max(safeRadius, 0.001));
             poisonTimerEl.style.display = 'block';
             poisonTimerEl.textContent = `毒圈: ${Math.max(0, Math.ceil(POISON_DURATION - elapsed))}s`;
 
             for (const playerKey of ['p1', 'p2']) {
                 const player = players[playerKey];
                 const dist = Math.hypot(player.mesh.position.x, player.mesh.position.z);
-                if (dist > safeRadius) {
+                if (safeRadius <= 0 || dist > safeRadius) {
                     applyDamage(playerKey, 5 * deltaSeconds);
                 }
             }
 
             if (neutralDogEnabled && neutralDog && neutralDog.alive) {
                 const dogDist = Math.hypot(neutralDog.group.position.x, neutralDog.group.position.z);
-                if (dogDist > safeRadius) {
+                if (safeRadius <= 0 || dogDist > safeRadius) {
                     damageNeutralDog(5 * deltaSeconds, null);
                 }
             }

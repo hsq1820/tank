@@ -827,8 +827,8 @@ body {
 import * as THREE from 'three';
 
 // ============== CONSTANTS ==============
-const MAP_HALF = 120;
-const MAP_RADIUS = 116;
+const MAP_HALF = 200;
+const MAP_RADIUS = 200;
 const TANK_RADIUS = 1.4;
 const TANK_HALF_W = 1.1;
 const TANK_HALF_L = 1.4;
@@ -860,7 +860,8 @@ const MAX_STAMINA = 100;
 const STAMINA_RECOVERY = 2;
 const BOOST_STAMINA_DRAIN = 24;
 const BOOST_STAMINA_MIN_START = 10;
-const DOG_MAX_HP = 200;
+const DOG_BASE_HP = 300;
+const DOG_HP_PER_EXTRA_PLAYER = 80;
 const DOG_MOVE_SPEED = 16;
 const DOG_ATTACK_DAMAGE = 25;
 const DOG_ATTACK_CD = 5000;
@@ -878,7 +879,7 @@ const PLAYER_REGEN_BUFF_RATE = 1;
 
 const WEAPONS = {
   mg: { name: '机枪', dmg: 1, cd: 50, speed: 120, color: 0xff4400, size: 0.15 },
-  shotgun: { name: '霰弹枪', dmg: 1, cd: 950, speed: 68, color: 0xffe08a, size: 0.09, pellets: 40, spread: Math.PI * 2 / 3, maxLife: 0.26 },
+  shotgun: { name: '霰弹枪', dmg: 1, cd: 1800, speed: 68, color: 0xffe08a, size: 0.09, pellets: 40, spread: Math.PI * 2 / 3, maxLife: 0.26 },
   cannon: { name: '加农炮', dmg: 25, cd: 1800, speed: 45, color: 0xffaa00, size: 0.4 }
 };
 const WEAPON_ORDER = ['mg', 'shotgun', 'cannon'];
@@ -1300,17 +1301,37 @@ function initThree() {
   dirLight.shadow.camera.bottom = -100;
   scene.add(dirLight);
 
+  function createCircularGridHelper(radius, rings = 5, spokes = 16) {
+    const group = new THREE.Group();
+    const ringMat = new THREE.LineBasicMaterial({ color: 0x6a9360, transparent: true, opacity: 0.65 });
+    const spokeMat = new THREE.LineBasicMaterial({ color: 0x7da26f, transparent: true, opacity: 0.42 });
+    const segments = 96;
+    for (let i = 1; i <= rings; i++) {
+      const r = radius * (i / rings);
+      const pts = [];
+      for (let s = 0; s <= segments; s++) {
+        const a = (s / segments) * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.cos(a) * r, 0.05, Math.sin(a) * r));
+      }
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ringMat));
+    }
+    for (let i = 0; i < spokes; i++) {
+      const a = (i / spokes) * Math.PI * 2;
+      const pts = [new THREE.Vector3(0, 0.05, 0), new THREE.Vector3(Math.cos(a) * radius, 0.05, Math.sin(a) * radius)];
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), spokeMat));
+    }
+    return group;
+  }
+
   // Floor
-  const floorGeo = new THREE.PlaneGeometry(MAP_HALF * 2, MAP_HALF * 2);
+  const floorGeo = new THREE.CircleGeometry(MAP_RADIUS, 96);
   const floorMat = new THREE.MeshStandardMaterial({ color: 0x7fbe63 });
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI/2;
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // Grid
-  const grid = new THREE.GridHelper(MAP_HALF * 2, 48, 0x6a9360, 0x7da26f);
-  scene.add(grid);
+  scene.add(createCircularGridHelper(MAP_RADIUS));
 
   // Canvas setup
   scopeCanvas = document.getElementById('scope-canvas');
@@ -2056,7 +2077,12 @@ function clearNeutralDog() {
   neutralDog = null;
 }
 
-function createNeutralDog() {
+function getNeutralDogMaxHp(playerCount) {
+  return DOG_BASE_HP + Math.max(0, playerCount - 1) * DOG_HP_PER_EXTRA_PLAYER;
+}
+
+function createNeutralDog(playerCount = 1) {
+  const maxHp = getNeutralDogMaxHp(playerCount);
   const group = new THREE.Group();
   const spriteMat = new THREE.SpriteMaterial({ map: DOG_TEXTURES.full, transparent: true, depthWrite: false });
   const sprite = new THREE.Sprite(spriteMat);
@@ -2090,7 +2116,8 @@ function createNeutralDog() {
     sprite,
     flashSprite,
     shieldDrop,
-    hp: DOG_MAX_HP,
+    hp: maxHp,
+    maxHp,
     alive: true,
     shieldDropped: false,
     targetIndex: null,
@@ -2106,9 +2133,9 @@ function createNeutralDog() {
   };
 }
 
-function spawnNeutralDog() {
+function spawnNeutralDog(playerCount = lobbyState.players.length || 1) {
   clearNeutralDog();
-  neutralDog = createNeutralDog();
+  neutralDog = createNeutralDog(playerCount);
 }
 
 function updateNeutralDogVisuals() {
@@ -2169,7 +2196,7 @@ function damageNeutralDog(amount, attackerIndex) {
     neutralDog.lastAttackerIndex = attackerIndex;
   }
 
-  if (!neutralDog.shieldDropped && neutralDog.hp <= DOG_SHIELD_BREAK_HP) {
+  if (!neutralDog.shieldDropped && neutralDog.hp <= neutralDog.maxHp / 2) {
     neutralDog.shieldDropped = true;
     neutralDog.shieldDropAt = Date.now();
     neutralDog.shieldDropX = neutralDog.group.position.x + 2.1;
@@ -2203,8 +2230,8 @@ function updatePlayerBuffs(dt) {
 function updateNeutralDog(dt) {
   if (!enableNeutralDog || !neutralDog || !neutralDog.alive) return;
   const now = performance.now();
-  if (now - neutralDog.lastDamagedAt >= DOG_REGEN_DELAY && neutralDog.hp < DOG_MAX_HP) {
-    neutralDog.hp = Math.min(DOG_MAX_HP, neutralDog.hp + DOG_REGEN_RATE * dt);
+  if (now - neutralDog.lastDamagedAt >= DOG_REGEN_DELAY && neutralDog.hp < neutralDog.maxHp) {
+    neutralDog.hp = Math.min(neutralDog.maxHp, neutralDog.hp + DOG_REGEN_RATE * dt);
   }
 
   const target = Number.isInteger(neutralDog.targetIndex) ? players[neutralDog.targetIndex] : null;
@@ -2880,29 +2907,25 @@ function updatePoison(dt) {
   
   const now = performance.now();
   const elapsed = (now - gameStartTime) / 1000;
-  
-  if (elapsed < POISON_DURATION) {
-    const currentRadius = MAX_RADIUS - (elapsed / POISON_DURATION) * (MAX_RADIUS - 30);
-    poisonCircle.scale.set(currentRadius / MAX_RADIUS, currentRadius / MAX_RADIUS, 1);
-    
-    // Damage outside circle
-    const distFromCenter = (p) => Math.sqrt(p.mesh.position.x ** 2 + p.mesh.position.z ** 2);
-    for (const player of players) {
-      if (!player.alive || !player.mesh) continue;
-      if (distFromCenter(player) > currentRadius) {
-        applyDamage(player, 5 * dt);
-        broadcast({ t: 'dmg', p: player.index, d: 5 * dt, poison: true });
-      }
-    }
 
-    if (enableNeutralDog && neutralDog && neutralDog.alive) {
-      const dogDist = Math.hypot(neutralDog.group.position.x, neutralDog.group.position.z);
-      if (dogDist > currentRadius) {
-        damageNeutralDog(5 * dt, null);
-      }
+  const currentRadius = MAX_RADIUS * Math.max(0, 1 - elapsed / POISON_DURATION);
+  poisonCircle.visible = true;
+  poisonCircle.scale.set(Math.max(currentRadius, 0.001) / MAX_RADIUS, Math.max(currentRadius, 0.001) / MAX_RADIUS, 1);
+
+  const distFromCenter = (p) => Math.sqrt(p.mesh.position.x ** 2 + p.mesh.position.z ** 2);
+  for (const player of players) {
+    if (!player.alive || !player.mesh) continue;
+    if (currentRadius <= 0 || distFromCenter(player) > currentRadius) {
+      applyDamage(player, 5 * dt);
+      broadcast({ t: 'dmg', p: player.index, d: 5 * dt, poison: true });
     }
-  } else {
-    poisonCircle.visible = false;
+  }
+
+  if (enableNeutralDog && neutralDog && neutralDog.alive) {
+    const dogDist = Math.hypot(neutralDog.group.position.x, neutralDog.group.position.z);
+    if (currentRadius <= 0 || dogDist > currentRadius) {
+      damageNeutralDog(5 * dt, null);
+    }
   }
 }
 
