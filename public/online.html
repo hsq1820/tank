@@ -1039,8 +1039,8 @@ let scopeCanvas, scopeCtx;
 let satelliteCanvas, satelliteCtx;
 let minimapCanvas, minimapCtx;
 let isMobileTouch = false;
-let mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turretLeft: false, turretRight: false };
-let prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turretLeft: false, turretRight: false };
+let mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turnAxis: 0, turretLeft: false, turretRight: false, turretAxis: 0 };
+let prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turnAxis: 0, turretLeft: false, turretRight: false, turretAxis: 0 };
 let roomHeartbeatTimer = 0;
 let roomListRefreshTimer = 0;
 let roomListSnapshot = new Map();
@@ -1381,6 +1381,7 @@ function setupMobileControls() {
     mobileInput.left = false;
     mobileInput.right = false;
     mobileInput.boost = false;
+    mobileInput.turnAxis = 0;
     stick.classList.remove('boost-ready');
     knob.style.transform = 'translate(0px, 0px)';
     sendImmediateClientInput();
@@ -1407,6 +1408,7 @@ function setupMobileControls() {
     mobileInput.backward = ny > dead;
     mobileInput.left = nx < -dead;
     mobileInput.right = nx > dead;
+    mobileInput.turnAxis = Math.abs(nx) > dead ? nx : 0;
     const boostZone = dist / Math.max(maxR, 1) >= 0.88;
     mobileInput.boost = boostZone;
     stick.classList.toggle('boost-ready', boostZone);
@@ -1455,6 +1457,7 @@ function setupMobileControls() {
     if (!on) {
       mobileInput.turretLeft = false;
       mobileInput.turretRight = false;
+      mobileInput.turretAxis = 0;
     }
     fireBtn.classList.toggle('active', on);
     sendImmediateClientInput();
@@ -1469,8 +1472,10 @@ function setupMobileControls() {
   fireBtn.addEventListener('pointermove', (e) => {
     if (firePointerId !== e.pointerId || !mobileInput.fire) return;
     const deltaX = e.clientX - fireStartX;
-    mobileInput.turretLeft = deltaX < -16;
-    mobileInput.turretRight = deltaX > 16;
+    const axis = Math.max(-1, Math.min(1, deltaX / 46));
+    mobileInput.turretAxis = Math.abs(axis) > 0.18 ? axis : 0;
+    mobileInput.turretLeft = mobileInput.turretAxis < 0;
+    mobileInput.turretRight = mobileInput.turretAxis > 0;
     sendImmediateClientInput();
   });
   fireBtn.addEventListener('pointerup', (e) => {
@@ -1659,11 +1664,13 @@ function orientHpBarsForCamera(targetCamera) {
 
 function updateTurretRotation(player, controls, dt) {
   if (!player || !player.turretPivot || player.usingSatellite || player.satelliteFiring) return;
-  const inputLeft = !!controls.turretLeft;
-  const inputRight = !!controls.turretRight;
-  const speed = 2.3;
-  if (inputLeft === inputRight) return;
-  player.turretYaw += (inputLeft ? 1 : -1) * speed * dt;
+  const axis = typeof controls.turretAxis === 'number' && Math.abs(controls.turretAxis) > 0.001
+    ? controls.turretAxis
+    : ((controls.turretRight ? 1 : 0) - (controls.turretLeft ? 1 : 0));
+  if (Math.abs(axis) < 0.001) return;
+  let speed = 1.35;
+  if (player.scoping) speed *= 0.45;
+  player.turretYaw -= axis * speed * dt;
   player.turretYaw = THREE.MathUtils.euclideanModulo(player.turretYaw + Math.PI, Math.PI * 2) - Math.PI;
   player.turretPivot.rotation.y = player.turretYaw;
 }
@@ -1970,7 +1977,7 @@ function createGrassPatch(x, z, radius) {
   base.position.y = 0.07;
   group.add(base);
 
-  const bladeCount = 34;
+  const bladeCount = 90;
   for (let i = 0; i < bladeCount; i++) {
     const angle = (i / bladeCount) * Math.PI * 2 + Math.random() * 0.3;
     const dist = Math.random() * (radius - 0.3);
@@ -2087,7 +2094,7 @@ function getNeutralDogMaxHp(playerCount) {
 function createNeutralDog(playerCount = 1) {
   const maxHp = getNeutralDogMaxHp(playerCount);
   const group = new THREE.Group();
-  const spriteMat = new THREE.SpriteMaterial({ map: DOG_TEXTURES.full, transparent: true, depthWrite: false, depthTest: false });
+  const spriteMat = new THREE.SpriteMaterial({ map: DOG_TEXTURES.full, transparent: true, depthWrite: false, depthTest: true });
   const sprite = new THREE.Sprite(spriteMat);
   sprite.center.set(0.78, 0.08);
   sprite.scale.set(9.6, 6.4, 1);
@@ -2098,7 +2105,7 @@ function createNeutralDog(playerCount = 1) {
     map: DOG_TEXTURES.full,
     transparent: true,
     depthWrite: false,
-    depthTest: false,
+    depthTest: true,
     opacity: 0,
     color: 0xffffff,
     blending: THREE.AdditiveBlending
@@ -2110,7 +2117,7 @@ function createNeutralDog(playerCount = 1) {
   group.position.set(0, 0, 0);
   scene.add(group);
 
-  const shieldMat = new THREE.SpriteMaterial({ map: DOG_TEXTURES.shield, transparent: true, depthWrite: false, depthTest: false });
+  const shieldMat = new THREE.SpriteMaterial({ map: DOG_TEXTURES.shield, transparent: true, depthWrite: false, depthTest: true });
   const shieldDrop = new THREE.Sprite(shieldMat);
   shieldDrop.center.set(0.5, 0.08);
   shieldDrop.scale.set(4.6, 4.8, 1);
@@ -2715,12 +2722,12 @@ function updateGrassStealth() {
     }
     player.inGrass = inGrass;
     
-    // Apply stealth visual
-    const enemyOpacity = inGrass ? 0.12 : 1.0;
+    // Apply stealth/soft blur visual
+    const targetOpacity = inGrass ? (player.index === localPlayerIndex ? 0.58 : 0.18) : 1.0;
     player.mesh.traverse(child => {
       if (child.isMesh && child.material) {
         child.material.transparent = inGrass;
-        child.material.opacity = enemyOpacity;
+        child.material.opacity = targetOpacity;
       }
     });
   }
@@ -3023,11 +3030,11 @@ function movePlayer(player, controls, dt) {
   player.prevZ = player.mesh.position.z;
 
   let speed = player.speed;
-  let turnSpeed = 2.7;
+  let turnSpeed = 1.6;
 
   if (player.scoping) {
     speed *= SCOPE_SPEED_MULT;
-    turnSpeed *= SCOPE_TURN_MULT;
+    turnSpeed *= 0.22;
   }
 
   player.boosting = (player.boosting || controls.boost) && (!!controls.forward || !!controls.backward) && player.stamina > 0;
@@ -3042,8 +3049,12 @@ function movePlayer(player, controls, dt) {
 
   // Turning
   const reversing = !!controls.backward && !controls.forward;
-  if (controls.left) player.mesh.rotation.y += (reversing ? -1 : 1) * turnSpeed * dt;
-  if (controls.right) player.mesh.rotation.y -= (reversing ? -1 : 1) * turnSpeed * dt;
+  const axis = typeof controls.turnAxis === 'number' && Math.abs(controls.turnAxis) > 0.001
+    ? controls.turnAxis
+    : ((controls.right ? 1 : 0) - (controls.left ? 1 : 0));
+  if (Math.abs(axis) > 0.001) {
+    player.mesh.rotation.y -= (reversing ? -1 : 1) * turnSpeed * dt * axis;
+  }
 
   // Forward/backward (match local mode orientation)
   const moveSpeed = speed * dt;
@@ -3080,7 +3091,8 @@ function renderView() {
     if (satellitePad) satellitePad.classList.add('active');
     camera.fov = NORMAL_FOV;
     camera.updateProjectionMatrix();
-    camera.position.set(0, 180, 0.01);
+    const satHeight = MAP_RADIUS / Math.tan(THREE.MathUtils.degToRad(NORMAL_FOV * 0.5));
+    camera.position.set(0, satHeight * 1.02, 0.01);
     camera.lookAt(0, 0, 0);
     scopeCanvas.classList.remove('active');
     if (scopeCanvas) {
@@ -3786,6 +3798,7 @@ function buildClientInput() {
     b: !!(isBoundDown('backward') || mobileInput.backward),
     l: !!(isBoundDown('left') || mobileInput.left),
     r: !!(isBoundDown('right') || mobileInput.right),
+    ax: mobileInput.turnAxis || 0,
     boost: !!mobileInput.boost,
     fire: !!(isBoundDown('fire') || mobileInput.fire),
     mine: !!(isBoundJustPressed('mine') || (mobileInput.mine && !prevMobileInput.mine)),
@@ -3796,6 +3809,7 @@ function buildClientInput() {
     sr: !!mobileInput.satRight,
     tl: !!(keys['ArrowLeft'] || mobileInput.turretLeft),
     tr: !!(keys['ArrowRight'] || mobileInput.turretRight),
+    ta: mobileInput.turretAxis || 0,
     scopeToggle: !!(isBoundJustPressed('scope') || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle)),
     weaponToggle: !!(isBoundJustPressed('weaponSwitch') || (mobileInput.weaponToggle && !prevMobileInput.weaponToggle))
   };
@@ -3835,9 +3849,11 @@ function gameLoop() {
         backward: input.b || false,
         left: input.l || false,
         right: input.r || false,
+        turnAxis: typeof input.ax === 'number' ? input.ax : 0,
         boost: input.boost || false,
         turretLeft: input.tl || false,
-        turretRight: input.tr || false
+        turretRight: input.tr || false,
+        turretAxis: typeof input.ta === 'number' ? input.ta : 0
       };
       movePlayer(player, controls, dt);
       updateTurretRotation(player, controls, dt);
@@ -3881,9 +3897,11 @@ function gameLoop() {
         backward: isBoundDown('backward') || mobileInput.backward,
         left: isBoundDown('left') || mobileInput.left,
         right: isBoundDown('right') || mobileInput.right,
+        turnAxis: mobileInput.turnAxis || 0,
         boost: mobileInput.boost || false,
         turretLeft: !!(keys['ArrowLeft'] || mobileInput.turretLeft),
-        turretRight: !!(keys['ArrowRight'] || mobileInput.turretRight)
+        turretRight: !!(keys['ArrowRight'] || mobileInput.turretRight),
+        turretAxis: mobileInput.turretAxis || 0
       };
       movePlayer(localPlayer, controls, dt);
       updateTurretRotation(localPlayer, controls, dt);
@@ -4012,7 +4030,7 @@ function gameLoop() {
         turretLeft: localInput.tl,
         turretRight: localInput.tr
       }, dt);
-      updateTurretRotation(localPlayer, { turretLeft: localInput.tl, turretRight: localInput.tr }, dt);
+      updateTurretRotation(localPlayer, { turretLeft: localInput.tl, turretRight: localInput.tr, turretAxis: localInput.ta || 0 }, dt);
 
       const firePressed = !!(isBoundDown('fire') || mobileInput.fire);
       const firePrev = !!((onlineBindings.fire && prevKeys[onlineBindings.fire]) || prevMobileInput.fire);

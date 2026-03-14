@@ -1134,19 +1134,20 @@
                 if (obj.material && obj.userData.stealthed !== undefined) {
                     if (obj.userData.stealthed) {
                         obj.material.transparent = true;
-                        obj.material.opacity = 0.12;
+                        obj.material.opacity = 0.18;
                     } else {
                         obj.material.transparent = obj.userData.originalTransparent || false;
                         obj.material.opacity = obj.userData.originalOpacity !== undefined ? obj.userData.originalOpacity : 1;
                     }
                 }
             });
-            // 自己的坦克对自己始终完全可见
+            // 自己进入草丛后也有轻微虚化
             const self = players[viewerKey];
             self.mesh.traverse(obj => {
                 if (obj.material) {
-                    obj.material.transparent = obj.userData.originalTransparent || false;
-                    obj.material.opacity = obj.userData.originalOpacity !== undefined ? obj.userData.originalOpacity : 1;
+                    const opacity = self.inGrass ? 0.58 : (obj.userData.originalOpacity !== undefined ? obj.userData.originalOpacity : 1);
+                    obj.material.transparent = self.inGrass || obj.userData.originalTransparent || false;
+                    obj.material.opacity = opacity;
                 }
             });
         }
@@ -1291,7 +1292,7 @@
             group.add(base);
 
             const bladeMat = new THREE.MeshStandardMaterial({ color: 0x4b9f40 });
-            const bladeCount = 34;
+            const bladeCount = 90;
             for (let i = 0; i < bladeCount; i++) {
                 const bladeHeight = 5.4 + Math.random() * 1.4;
                 const blade = new THREE.Mesh(new THREE.ConeGeometry(0.42 + Math.random() * 0.18, bladeHeight, 6), bladeMat);
@@ -1336,7 +1337,7 @@
         function createNeutralDog(playerCount = 2) {
             const maxHp = getNeutralDogMaxHp(playerCount);
             const group = new THREE.Group();
-            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: DOG_TEXTURES.full, transparent: true, depthWrite: false, depthTest: false }));
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: DOG_TEXTURES.full, transparent: true, depthWrite: false, depthTest: true }));
             sprite.center.set(0.78, 0.08);
             sprite.scale.set(9.6, 6.4, 1);
             sprite.renderOrder = 1000;
@@ -1346,6 +1347,7 @@
                 map: DOG_TEXTURES.full,
                 transparent: true,
                 depthWrite: false,
+                depthTest: true,
                 opacity: 0,
                 color: 0xffffff,
                 blending: THREE.AdditiveBlending
@@ -1357,7 +1359,7 @@
             group.position.set(0, 0, 0);
             scene.add(group);
 
-            const shieldDrop = new THREE.Sprite(new THREE.SpriteMaterial({ map: DOG_TEXTURES.shield, transparent: true, depthWrite: false, depthTest: false }));
+            const shieldDrop = new THREE.Sprite(new THREE.SpriteMaterial({ map: DOG_TEXTURES.shield, transparent: true, depthWrite: false, depthTest: true }));
             shieldDrop.center.set(0.5, 0.08);
             shieldDrop.scale.set(4.6, 4.8, 1);
             shieldDrop.visible = false;
@@ -2227,7 +2229,7 @@
             const effectiveSpeedMult = player.boosting ? boostMult : scopeMult * boostMult;
             const moveSpeed = player.speed * effectiveSpeedMult * deltaSeconds;
             const backSpeed = moveSpeed * 0.75;
-            const turnSpeed = 2.7 * (player.scoping ? SCOPE_TURN_MULT : 1) * deltaSeconds;
+            const turnSpeed = 1.95 * (player.scoping ? 0.22 : 1) * deltaSeconds;
             const reversing = !!keys[controls.backward] && !keys[controls.forward];
 
             if (keys[controls.forward]) player.mesh.translateZ(-moveSpeed);
@@ -2248,7 +2250,8 @@
             const fov = isScoping ? SCOPE_FOV : NORMAL_FOV;
             const shake = new THREE.Vector3((Math.random() - 0.5) * player.shake, (Math.random() - 0.5) * player.shake, 0);
             if (isSatelliteView) {
-                cam.position.set(0, 180, 0.01);
+                const satHeight = MAP_RADIUS / Math.tan(THREE.MathUtils.degToRad(NORMAL_FOV * 0.5));
+                cam.position.set(0, satHeight * 1.02, 0.01);
                 cam.lookAt(0, 0, 0);
             } else if (isScoping) {
                 // 第一人称平视：相机在坦克位置（炮塔高度），朝坦克前方看
