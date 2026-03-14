@@ -868,6 +868,7 @@ let grassPatches = [];
 let poisonCircle;
 let satellitePickup;
 let clock;
+let recentPredictedLocalShots = [];
 
 let peer = null;
 let connections = [];
@@ -1532,6 +1533,7 @@ function clearGameWorld() {
   grassPatches = [];
   poisonCircle = null;
   satellitePickup = null;
+  recentPredictedLocalShots = [];
   scoping = false;
 
   if (scopeCanvas && scopeCtx) {
@@ -1552,6 +1554,72 @@ function createBulletVisual(bullet) {
   scene.add(mesh);
   bullet.mesh = mesh;
   return bullet;
+}
+
+function buildBulletFromPlayer(player, now = performance.now()) {
+  const weapon = WEAPONS[player.weapon];
+  if (now - player.lastShot < weapon.cd) return null;
+  player.lastShot = now;
+
+  const spread = player.weapon === 'mg' ? MG_SPREAD_ANGLE : CANNON_SPREAD;
+  const spreadAngle = (enableBulletSpread && !player.scoping) ? (Math.random() - 0.5) * spread : 0;
+
+  const dir = new THREE.Vector3(0, 0, -1);
+  dir.applyQuaternion(player.mesh.quaternion);
+  dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), spreadAngle);
+
+  const muzzlePos = new THREE.Vector3();
+  player.muzzle.getWorldPosition(muzzlePos);
+
+  return {
+    x: muzzlePos.x,
+    z: muzzlePos.z,
+    vx: dir.x * weapon.speed,
+    vz: dir.z * weapon.speed,
+    dmg: weapon.dmg,
+    color: weapon.color,
+    size: weapon.size,
+    owner: player.index,
+    life: 0,
+    weapon: player.weapon
+  };
+}
+
+function predictLocalFire(player) {
+  const bullet = buildBulletFromPlayer(player);
+  if (!bullet) return false;
+  bullet.predictedLocal = true;
+  bullets.push(createBulletVisual(bullet));
+  recentPredictedLocalShots.push({
+    owner: bullet.owner,
+    time: performance.now(),
+    x: bullet.x,
+    z: bullet.z,
+    vx: bullet.vx,
+    vz: bullet.vz,
+    weapon: bullet.weapon
+  });
+  recentPredictedLocalShots = recentPredictedLocalShots.filter((shot) => performance.now() - shot.time < 600);
+  return true;
+}
+
+function reconcilePredictedLocalShot(data) {
+  if (isHost || data.p !== localPlayerIndex) return false;
+  const candidate = bullets.find((bullet) => bullet.predictedLocal && bullet.owner === data.p && Math.hypot(bullet.x - data.x, bullet.z - data.z) < 3.5);
+  if (!candidate) return false;
+
+  const weapon = WEAPONS[data.w || 'mg'] || WEAPONS.mg;
+  candidate.predictedLocal = false;
+  candidate.remoteVisual = true;
+  candidate.x = data.x;
+  candidate.z = data.z;
+  candidate.vx = data.vx;
+  candidate.vz = data.vz;
+  candidate.dmg = weapon.dmg;
+  candidate.color = weapon.color;
+  candidate.size = weapon.size;
+  if (candidate.mesh) candidate.mesh.position.set(candidate.x, 0.8, candidate.z);
+  return true;
 }
 
 function spawnBulletFromState(data) {
@@ -1876,35 +1944,10 @@ function toggleWeapon(player) {
 }
 
 function fire(player) {
-  const now = performance.now();
-  const weapon = WEAPONS[player.weapon];
-  if (now - player.lastShot < weapon.cd) return;
-  player.lastShot = now;
-
-  const spread = player.weapon === 'mg' ? MG_SPREAD_ANGLE : CANNON_SPREAD;
-  const spreadAngle = (enableBulletSpread && !player.scoping) ? (Math.random() - 0.5) * spread : 0;
-  
-  const dir = new THREE.Vector3(0, 0, -1);
-  dir.applyQuaternion(player.mesh.quaternion);
-  dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), spreadAngle);
-
-  const muzzlePos = new THREE.Vector3();
-  player.muzzle.getWorldPosition(muzzlePos);
-
-  const bullet = {
-    x: muzzlePos.x,
-    z: muzzlePos.z,
-    vx: dir.x * weapon.speed,
-    vz: dir.z * weapon.speed,
-    dmg: weapon.dmg,
-    color: weapon.color,
-    size: weapon.size,
-    owner: player.index,
-    life: 0
-  };
-
+  const bullet = buildBulletFromPlayer(player);
+  if (!bullet) return;
   bullets.push(createBulletVisual(bullet));
-  broadcast({ t: 'fire', p: player.index, x: muzzlePos.x, z: muzzlePos.z, vx: bullet.vx, vz: bullet.vz, w: player.weapon });
+  broadcast({ t: 'fire', p: player.index, x: bullet.x, z: bullet.z, vx: bullet.vx, vz: bullet.vz, w: player.weapon });
 }
 
 function createMine(player) {
@@ -1941,8 +1984,9 @@ function createMine(player) {
   broadcast({ t: 'mine', p: player.index, x: mine.x, z: mine.z });
 }
 
-function fireSatelliteLaser(player) {
+function fireSatelliteLaser(player, options = {}) {
   if (!player.usingSatellite || player.satelliteFiring) return;
+  const { broadcastEvent = isHost } = options;
   player.satelliteFiring = true;
   player.scoping = false;
   if (player.index === localPlayerIndex) scoping = false;
@@ -1952,10 +1996,11 @@ function fireSatelliteLaser(player) {
   player.satelliteHitTargets = new Set();
 
   const beam = createSatelliteBeamMesh();
+  beam.position.set(player.satelliteTarget.x, 0, player.satelliteTarget.z);
   scene.add(beam);
   player.satelliteBeam = beam;
 
-  broadcast({ t: 'sat', p: player.index });
+  if (broadcastEvent) broadcast({ t: 'sat', p: player.index });
 }
 
 function createSatelliteBeamMesh() {
@@ -2973,7 +3018,9 @@ function handleMessage(data, conn) {
 
     case 'fire':
       if (!isHost) {
-        spawnBulletFromState(data);
+        if (!reconcilePredictedLocalShot(data)) {
+          spawnBulletFromState(data);
+        }
       }
       break;
 
@@ -3039,10 +3086,25 @@ function applyRemoteState(state) {
     const player = players[i];
     if (!player || !player.mesh) continue;
 
-    // Interpolate position
-    player.mesh.position.x += (ps.x - player.mesh.position.x) * 0.3;
-    player.mesh.position.z += (ps.z - player.mesh.position.z) * 0.3;
-    player.mesh.rotation.y = ps.r;
+    const isLocalClientPlayer = !isHost && i === localPlayerIndex;
+    if (isLocalClientPlayer) {
+      const dx = ps.x - player.mesh.position.x;
+      const dz = ps.z - player.mesh.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > 4) {
+        player.mesh.position.x = ps.x;
+        player.mesh.position.z = ps.z;
+      } else {
+        player.mesh.position.x += dx * 0.18;
+        player.mesh.position.z += dz * 0.18;
+      }
+      const rotDelta = Math.atan2(Math.sin(ps.r - player.mesh.rotation.y), Math.cos(ps.r - player.mesh.rotation.y));
+      player.mesh.rotation.y += rotDelta * 0.2;
+    } else {
+      player.mesh.position.x += (ps.x - player.mesh.position.x) * 0.3;
+      player.mesh.position.z += (ps.z - player.mesh.position.z) * 0.3;
+      player.mesh.rotation.y = ps.r;
+    }
     player.hp = ps.hp;
     player.stamina = typeof ps.st === 'number' ? ps.st : player.stamina;
     player.weapon = ps.w;
@@ -3099,7 +3161,7 @@ function buildClientInput() {
 // ============== GAME LOOP ==============
 let gameStartTime = 0;
 let lastStateBroadcast = 0;
-const STATE_BROADCAST_INTERVAL = 50; // 20Hz
+const STATE_BROADCAST_INTERVAL = 33; // ~30Hz
 
 function gameLoop() {
   if (!gameStarted) return;
@@ -3248,7 +3310,37 @@ function gameLoop() {
     }
   } else {
     const localPlayer = players[localPlayerIndex];
+    const localInput = buildClientInput();
     if (localPlayer && localPlayer.alive) {
+      if (localInput.f && !localPlayer.prevForwardPressed) {
+        const now = performance.now();
+        if (now - localPlayer.lastTapTime < DOUBLE_TAP_MS && localPlayer.lastTapKey === 'forward' && localPlayer.stamina >= BOOST_STAMINA_MIN_START) {
+          localPlayer.boosting = true;
+          localPlayer.boostEndTime = now + BOOST_DURATION;
+        }
+        localPlayer.lastTapKey = 'forward';
+        localPlayer.lastTapTime = now;
+      }
+      localPlayer.prevForwardPressed = !!localInput.f;
+
+      movePlayer(localPlayer, {
+        forward: localInput.f,
+        backward: localInput.b,
+        left: localInput.l,
+        right: localInput.r,
+        boost: localInput.boost
+      }, dt);
+
+      const firePressed = !!(isBoundDown('fire') || mobileInput.fire);
+      const firePrev = !!((onlineBindings.fire && prevKeys[onlineBindings.fire]) || prevMobileInput.fire);
+      if (localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
+        if (firePressed && !firePrev) {
+          fireSatelliteLaser(localPlayer, { broadcastEvent: false });
+        }
+      } else if (firePressed) {
+        predictLocalFire(localPlayer);
+      }
+
       const scopePressed = !!(isBoundJustPressed('scope') || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle));
       if (scopePressed && !localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
         localPlayer.scoping = !localPlayer.scoping;
@@ -3259,12 +3351,22 @@ function gameLoop() {
       if (weaponPressed && !localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
         toggleWeapon(localPlayer);
       }
+
+      if (localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
+        const targetSpeed = SATELLITE_TARGET_SPEED * dt;
+        if (localInput.f || localInput.su) localPlayer.satelliteTarget.z -= targetSpeed;
+        if (localInput.b || localInput.sd) localPlayer.satelliteTarget.z += targetSpeed;
+        if (localInput.l || localInput.sl) localPlayer.satelliteTarget.x -= targetSpeed;
+        if (localInput.r || localInput.sr) localPlayer.satelliteTarget.x += targetSpeed;
+        localPlayer.satelliteTarget.x = Math.max(-MAP_HALF + 10, Math.min(MAP_HALF - 10, localPlayer.satelliteTarget.x));
+        localPlayer.satelliteTarget.z = Math.max(-MAP_HALF + 10, Math.min(MAP_HALF - 10, localPlayer.satelliteTarget.z));
+      }
     }
 
     if (localPlayerIndex >= 0) {
       const now = performance.now();
       if (now - lastSentInputAt > 16) {
-        sendToHost({ t: 'input', p: localPlayerIndex, input: buildClientInput() });
+        sendToHost({ t: 'input', p: localPlayerIndex, input: localInput });
         lastSentInputAt = now;
       }
     }
