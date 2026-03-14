@@ -609,7 +609,8 @@
     <script type="module">
         import * as THREE from 'three';
 
-        const MAP_HALF = 100;
+        const MAP_HALF = 120;
+        const MAP_RADIUS = 116;
         const TANK_RADIUS = 1.4;
         const MINE_RADIUS = 0.8;
         const MINE_DAMAGE = 25;
@@ -620,7 +621,7 @@
         const COLLISION_DAMAGE = 100 / 6;
         const COLLISION_DAMAGE_CD = 1000;
         const POISON_DURATION = 150;
-        const MAX_RADIUS = Math.sqrt(100 * 100 + 100 * 100);
+        const MAX_RADIUS = MAP_RADIUS;
         const HEALTH_PACK_HEAL = 100 / 3;
         const HEALTH_PACK_RESPAWN = 15000;
         const MINIMAP_RADIUS = 65;
@@ -650,6 +651,7 @@
         const DOG_HIT_RADIUS = 2.8;
         const DOG_ATTACK_RANGE = 4.1;
         const DOG_SHIELD_DROP_ANIM_MS = 1200;
+        const DOG_ATTACK_SWING_RAD = THREE.MathUtils.degToRad(15);
         const PLAYER_REGEN_BUFF_DELAY = 5000;
         const PLAYER_REGEN_BUFF_RATE = 1;
 
@@ -688,15 +690,42 @@
 
         const WEAPONS = {
             mg: { name: '机枪', dmg: 1, cd: 50, speed: 120, color: 0xff4400, size: 0.15 },
-            cannon: { name: '加农炮', dmg: 25, cd: 1200, speed: 45, color: 0xffaa00, size: 0.4 }
+            shotgun: { name: '霰弹枪', dmg: 1, cd: 950, speed: 68, color: 0xffe08a, size: 0.09, pellets: 40, spread: Math.PI * 2 / 3, maxLife: 0.26 },
+            cannon: { name: '加农炮', dmg: 25, cd: 1800, speed: 45, color: 0xffaa00, size: 0.4 }
         };
+        const WEAPON_ORDER = ['mg', 'shotgun', 'cannon'];
 
         const textureLoader = new THREE.TextureLoader();
         const DOG_TEXTURES = {
-            full: textureLoader.load('/daodunDog.png'),
-            noShield: textureLoader.load('/daoDog.png'),
-            shield: textureLoader.load('/dun.png')
+            full: textureLoader.load('/resources/picture/daodunDog.png'),
+            noShield: textureLoader.load('/resources/picture/daoDog.png'),
+            shield: textureLoader.load('/resources/picture/dun.png')
         };
+
+        function createSoundPlayer(path, poolSize = 4, volume = 1) {
+            const pool = Array.from({ length: poolSize }, () => {
+                const audio = new Audio(path);
+                audio.preload = 'auto';
+                audio.volume = volume;
+                return audio;
+            });
+            let index = 0;
+            return function play() {
+                const audio = pool[index];
+                index = (index + 1) % pool.length;
+                try {
+                    audio.pause();
+                    audio.currentTime = 0;
+                    audio.play().catch(() => {});
+                } catch (error) {}
+            };
+        }
+
+        const playDogAttackSound = createSoundPlayer('/resources/sounds/wtdd.WAV', 3, 0.9);
+        const playMgSound = createSoundPlayer('/resources/sounds/jiqiang.WAV', 8, 0.7);
+        const playShotgunSound = createSoundPlayer('/resources/sounds/xiandanqiang.WAV', 4, 0.85);
+        const playCannonSound = createSoundPlayer('/resources/sounds/pao.WAV', 4, 0.9);
+        const playSatelliteSound = createSoundPlayer('/resources/sounds/weixing.WAV', 3, 0.85);
 
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0xd9f1ff);
@@ -961,14 +990,14 @@
         }
 
         const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(200, 200),
+            new THREE.PlaneGeometry(MAP_HALF * 2, MAP_HALF * 2),
             new THREE.MeshStandardMaterial({ color: 0x7fbe63 })
         );
         floor.rotation.x = -Math.PI / 2;
         floor.receiveShadow = true;
         scene.add(floor);
 
-        const grid = new THREE.GridHelper(200, 40, 0x6a9360, 0x7da26f);
+        const grid = new THREE.GridHelper(MAP_HALF * 2, 48, 0x6a9360, 0x7da26f);
         scene.add(grid);
 
         const hemi = new THREE.HemisphereLight(0xf4fbff, 0x8eb070, 0.55);
@@ -1134,10 +1163,10 @@
 
         function randomGroundPosition(minFromCenter = 0) {
             for (let i = 0; i < 400; i++) {
-                const x = (Math.random() - 0.5) * 180;
-                const z = (Math.random() - 0.5) * 180;
+                const x = (Math.random() - 0.5) * MAP_HALF * 2;
+                const z = (Math.random() - 0.5) * MAP_HALF * 2;
                 if (Math.hypot(x, z) < minFromCenter) continue;
-                if (Math.abs(x) > 92 || Math.abs(z) > 92) continue;
+                if (Math.hypot(x, z) > MAP_RADIUS - 6) continue;
                 return { x, z };
             }
             return { x: 0, z: 0 };
@@ -1254,7 +1283,7 @@
         function spawnGrassPatches() {
             const count = 8 + Math.floor(Math.random() * 5);
             for (let i = 0; i < count; i++) {
-                const radius = 4.4 + Math.random() * 1.6;
+                const radius = 6.4 + Math.random() * 2.4;
                 const pos = findSafeSpawnPosition({ minFromCenter: 18, minRockDistance: 6, minGrassDistance: 11, minPackDistance: 7 });
                 const mesh = createGrassPatch(radius);
                 mesh.position.set(pos.x, 0, pos.z);
@@ -1300,6 +1329,7 @@
                 lastDamagedAt: Date.now(),
                 lastAttackAt: 0,
                 attackWindupUntil: 0,
+                attackWindupStartAt: 0,
                 shieldDropAt: 0,
                 shieldDropX: 0,
                 shieldDropZ: 0
@@ -1308,6 +1338,18 @@
 
         function updateNeutralDogVisuals() {
             if (!neutralDog) return;
+            const now = Date.now();
+            const attackActive = neutralDog.attackWindupUntil && now < neutralDog.attackWindupUntil;
+            if (attackActive) {
+                const phase = Math.min(1, Math.max(0, (now - neutralDog.attackWindupStartAt) / DOG_ATTACK_WINDUP));
+                const angle = phase < 0.5
+                    ? THREE.MathUtils.lerp(0, DOG_ATTACK_SWING_RAD, phase * 2)
+                    : THREE.MathUtils.lerp(DOG_ATTACK_SWING_RAD, -DOG_ATTACK_SWING_RAD, (phase - 0.5) * 2);
+                neutralDog.sprite.material.rotation = angle;
+            } else {
+                neutralDog.sprite.material.rotation *= 0.78;
+                if (Math.abs(neutralDog.sprite.material.rotation) < 0.002) neutralDog.sprite.material.rotation = 0;
+            }
             const shieldAnimActive = neutralDog.shieldDropped && neutralDog.shieldDropAt && (Date.now() - neutralDog.shieldDropAt < DOG_SHIELD_DROP_ANIM_MS);
             neutralDog.sprite.material.map = neutralDog.shieldDropped ? DOG_TEXTURES.noShield : DOG_TEXTURES.full;
             neutralDog.sprite.material.needsUpdate = true;
@@ -1410,7 +1452,9 @@
             }
 
             if (dist <= DOG_ATTACK_RANGE && now - neutralDog.lastAttackAt >= DOG_ATTACK_CD) {
+                neutralDog.attackWindupStartAt = now;
                 neutralDog.attackWindupUntil = now + DOG_ATTACK_WINDUP;
+                playDogAttackSound();
             }
         }
 
@@ -1454,7 +1498,8 @@
 
         function toggleWeapon(playerKey) {
             const player = players[playerKey];
-            player.weapon = player.weapon === 'mg' ? 'cannon' : 'mg';
+            const idx = WEAPON_ORDER.indexOf(player.weapon);
+            player.weapon = WEAPON_ORDER[(idx + 1 + WEAPON_ORDER.length) % WEAPON_ORDER.length];
             updatePlayerHud(playerKey);
         }
 
@@ -1489,28 +1534,45 @@
             const cfg = WEAPONS[player.weapon];
             const now = Date.now();
             if (now - player.lastShot < cfg.cd) return;
+            player.lastShot = now;
+
+            if (player.weapon === 'mg') playMgSound();
+            else if (player.weapon === 'shotgun') playShotgunSound();
+            else if (player.weapon === 'cannon') playCannonSound();
 
             const muzzlePos = new THREE.Vector3();
             player.muzzle.getWorldPosition(muzzlePos);
-            let dir = new THREE.Vector3(0, 0, -1).applyQuaternion(player.mesh.quaternion).normalize();
 
-            // 弹道偏移：开启且非瞄准镜状态时随机偏移（机枪±10°，加农±5°）
-            if (bulletSpreadEnabled && !player.scoping) {
-                const maxSpread = player.weapon === 'cannon' ? CANNON_SPREAD_ANGLE : MG_SPREAD_ANGLE;
-                const spreadAngle = (Math.random() - 0.5) * 2 * maxSpread;
+            const projectileCount = player.weapon === 'shotgun' ? cfg.pellets : 1;
+            for (let i = 0; i < projectileCount; i++) {
+                const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(player.mesh.quaternion).normalize();
+                let spreadAngle = 0;
+                if (player.weapon === 'shotgun') {
+                    spreadAngle = (Math.random() - 0.5) * cfg.spread;
+                } else if (bulletSpreadEnabled && !player.scoping) {
+                    const maxSpread = player.weapon === 'cannon' ? CANNON_SPREAD_ANGLE : MG_SPREAD_ANGLE;
+                    spreadAngle = (Math.random() - 0.5) * 2 * maxSpread;
+                }
                 dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), spreadAngle);
-            }
 
-            const bulletMesh = new THREE.Mesh(
-                new THREE.SphereGeometry(cfg.size, 12, 12),
-                new THREE.MeshBasicMaterial({ color: cfg.color })
-            );
-            bulletMesh.position.copy(muzzlePos);
-            bulletMesh.layers.set(0);
-            scene.add(bulletMesh);
-            bullets.push({ mesh: bulletMesh, dir, speed: cfg.speed, dmg: cfg.dmg, owner: playerKey, radius: cfg.size });
-            bullets[bullets.length - 1].dmg *= player.damageMultiplier || 1;
-            player.lastShot = now;
+                const bulletMesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(cfg.size, 12, 12),
+                    new THREE.MeshBasicMaterial({ color: cfg.color })
+                );
+                bulletMesh.position.copy(muzzlePos);
+                bulletMesh.layers.set(0);
+                scene.add(bulletMesh);
+                bullets.push({
+                    mesh: bulletMesh,
+                    dir,
+                    speed: cfg.speed,
+                    dmg: cfg.dmg * (player.damageMultiplier || 1),
+                    owner: playerKey,
+                    radius: cfg.size,
+                    life: 0,
+                    maxLife: cfg.maxLife || 0
+                });
+            }
         }
 
         function disposeBullet(bullet) {
@@ -1726,6 +1788,7 @@
             const player = players[playerKey];
             if (!player.usingSatellite || player.satelliteFiring) return;
             player.satelliteFiring = true;
+            playSatelliteSound();
             player.satelliteFireTime = Date.now();
             player.satelliteDamageApplied = false;
             player.satelliteBeam = createSatelliteBeam(player.satelliteTarget);
@@ -1751,8 +1814,13 @@
         }
 
         function keepTankInBounds(player) {
-            player.mesh.position.x = THREE.MathUtils.clamp(player.mesh.position.x, -96, 96);
-            player.mesh.position.z = THREE.MathUtils.clamp(player.mesh.position.z, -96, 96);
+            const pos = player.mesh.position;
+            const dist = Math.hypot(pos.x, pos.z);
+            const limit = MAP_RADIUS - 2;
+            if (dist > limit && dist > 0.001) {
+                pos.x = pos.x / dist * limit;
+                pos.z = pos.z / dist * limit;
+            }
         }
 
         // OBB collision: half-extents match tank body BoxGeometry(2.2, 0.8, 2.8)
@@ -2023,7 +2091,13 @@
         function updateBullets(deltaSeconds) {
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const bullet = bullets[i];
+                bullet.life = (bullet.life || 0) + deltaSeconds;
                 bullet.mesh.position.addScaledVector(bullet.dir, bullet.speed * deltaSeconds);
+                if (bullet.maxLife && bullet.life > bullet.maxLife) {
+                    disposeBullet(bullet);
+                    bullets.splice(i, 1);
+                    continue;
+                }
                 if (checkBulletObstacleCollision(bullet, i)) continue;
 
                 if (neutralDogEnabled && neutralDog && neutralDog.alive) {
