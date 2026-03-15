@@ -419,6 +419,48 @@ body {
   margin-top: 6px;
   min-height: 18px;
 }
+.inventory-bar {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.inventory-slot {
+  min-width: 64px;
+  padding: 8px 9px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  transition: opacity 0.2s, border-color 0.2s, background 0.2s;
+}
+.inventory-slot.empty {
+  opacity: 0.68;
+}
+.inventory-key {
+  font-size: 11px;
+  line-height: 1;
+  color: rgba(255,255,255,0.72);
+}
+.inventory-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  background: rgba(255,255,255,0.12);
+}
+.inventory-name {
+  font-size: 11px;
+  line-height: 1;
+  color: #fff;
+}
 .announcement-banner {
   position: fixed;
   top: 18px;
@@ -628,6 +670,49 @@ body {
   height: 200px;
   pointer-events: none;
 }
+.mobile-item-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 192px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  pointer-events: none;
+}
+.mobile-item-btn {
+  width: 74px;
+  min-height: 54px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(6, 14, 30, 0.72);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  pointer-events: auto;
+  touch-action: manipulation;
+  user-select: none;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.24);
+}
+.mobile-item-btn:active,
+.mobile-item-btn.active {
+  transform: scale(0.96);
+}
+.mobile-item-btn.empty {
+  opacity: 0.62;
+}
+.mobile-item-btn .slot-no {
+  font-size: 11px;
+  line-height: 1;
+  color: rgba(255,255,255,0.72);
+}
+.mobile-item-btn .slot-label {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+}
 
 .mobile-btn {
   position: absolute;
@@ -676,6 +761,13 @@ body {
     bottom: auto;
     width: 136px;
     height: 136px;
+  }
+  .inventory-slot {
+    min-width: 58px;
+    padding: 8px 7px;
+  }
+  .mobile-item-bar {
+    bottom: 184px;
   }
 }
 </style>
@@ -755,6 +847,11 @@ body {
       <div class="stamina-bar"><div class="stamina-fill" style="width:100%"></div></div>
       <div class="weapon">武器: <span>机枪</span></div>
       <div class="status">状态：无</div>
+      <div class="inventory-bar" id="inventory-bar-local">
+        <div class="inventory-slot empty" id="inv-slot-0"><div class="inventory-key">1</div><div class="inventory-icon">-</div><div class="inventory-name">空</div></div>
+        <div class="inventory-slot empty" id="inv-slot-1"><div class="inventory-key">2</div><div class="inventory-icon">-</div><div class="inventory-name">空</div></div>
+        <div class="inventory-slot empty" id="inv-slot-2"><div class="inventory-key">3</div><div class="inventory-icon">-</div><div class="inventory-name">空</div></div>
+      </div>
     </div>
   </div>
   <div class="minimap-container">
@@ -765,7 +862,8 @@ body {
     <kbd>Space</kbd> 射击 
     <kbd>Q</kbd> 切换武器 
     <kbd>E</kbd> 放置地雷 
-    <kbd>Z</kbd> 瞄准镜
+    <kbd>Z</kbd> 瞄准镜 
+    <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 道具
   </div>
 </div>
 
@@ -806,6 +904,11 @@ body {
       </svg>
     </button>
   </div>
+  <div class="mobile-item-bar">
+    <button class="mobile-item-btn empty" id="mb-item-0" type="button" aria-label="使用1号道具"><span class="slot-no">1</span><span class="slot-label">空</span></button>
+    <button class="mobile-item-btn empty" id="mb-item-1" type="button" aria-label="使用2号道具"><span class="slot-no">2</span><span class="slot-label">空</span></button>
+    <button class="mobile-item-btn empty" id="mb-item-2" type="button" aria-label="使用3号道具"><span class="slot-no">3</span><span class="slot-label">空</span></button>
+  </div>
 </div>
 
 <div class="winner-overlay" id="winner-overlay">
@@ -833,7 +936,7 @@ const TANK_RADIUS = 1.4;
 const TANK_HALF_W = 1.1;
 const TANK_HALF_L = 1.4;
 const MINE_RADIUS = 0.8;
-const MINE_DAMAGE = 25;
+const MINE_DAMAGE = 50;
 const MINE_COOLDOWN = 5000;
 const DOUBLE_TAP_MS = 250;
 const BOOST_DURATION = 500;
@@ -842,8 +945,8 @@ const COLLISION_DAMAGE = 100/6;
 const COLLISION_DAMAGE_CD = 1000;
 const POISON_DURATION = 150;
 const MAX_RADIUS = MAP_RADIUS;
-const HEALTH_PACK_HEAL = 100/3;
-const HEALTH_PACK_RESPAWN = 15000;
+const HEALTH_PACK_HEAL = 30;
+const HEALTH_PACK_RESPAWN = 20000;
 const MINIMAP_RADIUS = 65;
 const MG_SPREAD_ANGLE = 10 * Math.PI / 180;
 const CANNON_SPREAD = 5 * Math.PI / 180;
@@ -876,6 +979,29 @@ const DOG_ATTACK_SWING_RAD = THREE.MathUtils.degToRad(15);
 const DOG_HIT_FLASH_MS = 180;
 const PLAYER_REGEN_BUFF_DELAY = 5000;
 const PLAYER_REGEN_BUFF_RATE = 1;
+const ITEM_SLOT_COUNT = 3;
+const ITEM_PICKUP_COUNT = 4;
+const ITEM_PICKUP_RESPAWN = 12000;
+const BOILING_BLOOD_DURATION = 10000;
+const BOILING_BLOOD_DRAIN = 60;
+const ITEM_SHIELD_VALUE = 30;
+const ITEM_SHIELD_DURATION = 6000;
+const RAM_DURATION = 10000;
+const RAM_SPEED_MULT = 1.8;
+const RAM_DAMAGE_TAKEN_MULT = 0.7;
+const RAM_HIT_DAMAGE = 35;
+const RAM_SELF_DAMAGE = 5;
+const RAM_DASH_DURATION = 320;
+const RAM_DASH_SPEED_MULT = 3.5;
+const RAM_DASH_CD = 800;
+const RAM_IMPACT_CD = 650;
+const RAM_KNOCKBACK_DISTANCE = 6.5;
+const PLANE_DURATION = 15000;
+const PLANE_HEIGHT = 18;
+const PLANE_BOMB_INTERVAL = 1000;
+const PLANE_BOMB_DAMAGE = 5;
+const PLANE_BOMB_RADIUS = 4.2;
+const PLANE_SHADOW_SCALE = 4.6;
 
 const WEAPONS = {
   mg: { name: '机枪', dmg: 1, cd: 50, speed: 120, color: 0xff4400, size: 0.15 },
@@ -883,6 +1009,13 @@ const WEAPONS = {
   cannon: { name: '加农炮', dmg: 25, cd: 1800, speed: 45, color: 0xffaa00, size: 0.4 }
 };
 const WEAPON_ORDER = ['mg', 'shotgun', 'cannon'];
+const ITEM_DEFS = {
+  boiling: { id: 'boiling', name: '沸血', shortName: '沸血', glyph: '血', color: '#ef4444' },
+  plane: { id: 'plane', name: '飞机', shortName: '飞机', glyph: '机', color: '#38bdf8' },
+  shield: { id: 'shield', name: '护盾', shortName: '护盾', glyph: '盾', color: '#60a5fa' },
+  ram: { id: 'ram', name: '冲撞', shortName: '冲撞', glyph: '撞', color: '#f97316' }
+};
+const ITEM_IDS = Object.keys(ITEM_DEFS);
 
 const PLAYER_COLORS = [0x00c6ff, 0xff512f, 0x00ff88, 0xffaa00];
 const PLAYER_NAMES = ['蓝色坦克', '红色坦克', '绿色坦克', '橙色坦克'];
@@ -907,10 +1040,12 @@ let players = [];
 let bullets = [];
 let mines = [];
 let rocks = [];
+let structures = [];
 let healthPacks = [];
 let grassPatches = [];
 let poisonCircle;
 let satellitePickup;
+let itemPickups = [];
 let clock;
 let recentPredictedLocalShots = [];
 let neutralDog = null;
@@ -979,7 +1114,9 @@ function getReadableKeyName(code) {
     Space: '空格', KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D', KeyQ: 'Q', KeyE: 'E', KeyZ: 'Z', KeyC: 'C',
     ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Enter: '回车', Quote: '', Backslash: '\\', BracketRight: ']'
   };
-  return keyMap[code] || code.replace(/^Key/, '');
+  if (keyMap[code]) return keyMap[code];
+  if (code.startsWith('Digit')) return code.slice(5);
+  return code.replace(/^Key/, '');
 }
 
 function loadOnlineBindings() {
@@ -1003,6 +1140,10 @@ function isBoundJustPressed(action) {
   return !!(code && keys[code] && !prevKeys[code]);
 }
 
+function isCodeJustPressed(code) {
+  return !!(code && keys[code] && !prevKeys[code]);
+}
+
 function updateOnlineControlHint() {
   const hint = document.querySelector('.controls-hint');
   if (!hint) return;
@@ -1014,7 +1155,8 @@ function updateOnlineControlHint() {
     <kbd>${getReadableKeyName(onlineBindings.fire)}</kbd> 射击 
     <kbd>${getReadableKeyName(onlineBindings.weaponSwitch)}</kbd> 切换武器 
     <kbd>${getReadableKeyName(onlineBindings.mine)}</kbd> 放置地雷 
-    <kbd>${getReadableKeyName(onlineBindings.scope)}</kbd> 瞄准镜
+    <kbd>${getReadableKeyName(onlineBindings.scope)}</kbd> 瞄准镜 
+    <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 道具
   `;
 }
 
@@ -1039,8 +1181,8 @@ let scopeCanvas, scopeCtx;
 let satelliteCanvas, satelliteCtx;
 let minimapCanvas, minimapCtx;
 let isMobileTouch = false;
-let mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turnAxis: 0, turretLeft: false, turretRight: false, turretAxis: 0 };
-let prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turnAxis: 0, turretLeft: false, turretRight: false, turretAxis: 0 };
+let mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, item0: false, item1: false, item2: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turnAxis: 0, turretLeft: false, turretRight: false, turretAxis: 0, satTapPending: false, satTapX: 0, satTapZ: 0 };
+let prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, item0: false, item1: false, item2: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turnAxis: 0, turretLeft: false, turretRight: false, turretAxis: 0, satTapPending: false, satTapX: 0, satTapZ: 0 };
 let roomHeartbeatTimer = 0;
 let roomListRefreshTimer = 0;
 let roomListSnapshot = new Map();
@@ -1403,12 +1545,17 @@ function setupMobileControls() {
 
     const nx = dx / maxR;
     const ny = dy / maxR;
-    const dead = 0.22;
+    const dead = 0.32;
     mobileInput.forward = ny < -dead;
     mobileInput.backward = ny > dead;
     mobileInput.left = nx < -dead;
     mobileInput.right = nx > dead;
-    mobileInput.turnAxis = Math.abs(nx) > dead ? nx : 0;
+    if (Math.abs(nx) > dead) {
+      const normalized = (Math.abs(nx) - dead) / (1 - dead);
+      mobileInput.turnAxis = Math.sign(nx) * Math.pow(Math.max(0, normalized), 1.35);
+    } else {
+      mobileInput.turnAxis = 0;
+    }
     const boostZone = dist / Math.max(maxR, 1) >= 0.88;
     mobileInput.boost = boostZone;
     stick.classList.toggle('boost-ready', boostZone);
@@ -1496,6 +1643,12 @@ function setupMobileControls() {
   weaponBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); triggerTapAction('weaponToggle', weaponBtn); });
   mineBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); triggerTapAction('mine', mineBtn); });
   scopeBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); triggerTapAction('scopeToggle', scopeBtn); });
+  const itemBtn0 = document.getElementById('mb-item-0');
+  const itemBtn1 = document.getElementById('mb-item-1');
+  const itemBtn2 = document.getElementById('mb-item-2');
+  if (itemBtn0) itemBtn0.addEventListener('pointerdown', (e) => { e.preventDefault(); triggerTapAction('item0', itemBtn0); });
+  if (itemBtn1) itemBtn1.addEventListener('pointerdown', (e) => { e.preventDefault(); triggerTapAction('item1', itemBtn1); });
+  if (itemBtn2) itemBtn2.addEventListener('pointerdown', (e) => { e.preventDefault(); triggerTapAction('item2', itemBtn2); });
 
   const bindSatelliteHold = (id, field) => {
     const btn = document.getElementById(id);
@@ -1529,6 +1682,9 @@ function setupMobileControls() {
     if (satelliteRaycaster.ray.intersectPlane(satelliteGroundPlane, satelliteGroundHit)) {
       player.satelliteTarget.x = THREE.MathUtils.clamp(satelliteGroundHit.x, -MAP_HALF + 10, MAP_HALF - 10);
       player.satelliteTarget.z = THREE.MathUtils.clamp(satelliteGroundHit.z, -MAP_HALF + 10, MAP_HALF - 10);
+      mobileInput.satTapX = player.satelliteTarget.x;
+      mobileInput.satTapZ = player.satelliteTarget.z;
+      mobileInput.satTapPending = true;
     }
     sendImmediateClientInput();
   });
@@ -1540,13 +1696,17 @@ function createPlayerState(index) {
     index: index,
     hp: 100,
     shield: 0,
+    tempShield: 0,
+    tempShieldExpiresAt: 0,
     weapon: 'mg',
     damageMultiplier: 1,
     regenBuff: false,
     buffType: '',
+    inventory: [],
     color: PLAYER_COLORS[index],
     name: PLAYER_NAMES[index],
     mesh: null,
+    planeShadow: null,
     turretPivot: null,
     muzzle: null,
     turretYaw: 0,
@@ -1573,12 +1733,16 @@ function createPlayerState(index) {
     satelliteBeam: null,
     satelliteDamageApplied: false,
     satelliteHitDog: false,
+    boiling: { active: false, endsAt: 0 },
+    plane: { active: false, endsAt: 0, lastBombAt: 0 },
+    ram: { active: false, endsAt: 0, dashing: false, dashEndsAt: 0, dashCooldownAt: 0, lastHitAt: 0, lastHitTarget: -1 },
     alive: true,
     x: 0, z: 0, rotation: 0,
     prevX: 0, prevZ: 0,
     prevForwardPressed: false,
     prevBackwardPressed: false,
-    input: { f: false, b: false, l: false, r: false, fire: false, mine: false, scope: false, sat: false, su: false, sd: false, sl: false, sr: false, tl: false, tr: false, scopeToggle: false, weaponToggle: false }
+    prevFirePressed: false,
+    input: { f: false, b: false, l: false, r: false, fire: false, mine: false, scope: false, sat: false, su: false, sd: false, sl: false, sr: false, tl: false, tr: false, scopeToggle: false, weaponToggle: false, i0: false, i1: false, i2: false }
   };
 }
 
@@ -1641,6 +1805,23 @@ function createTankMesh(color) {
   return { group, muzzle, turretPivot };
 }
 
+function createPlaneShadowMesh(color) {
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 24),
+    new THREE.MeshBasicMaterial({
+      color: darkenColor(color, 0.45),
+      transparent: true,
+      opacity: 0.24,
+      depthWrite: false
+    })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.08;
+  shadow.visible = false;
+  scene.add(shadow);
+  return shadow;
+}
+
 function updateTankHpBar(player) {
   if (!player || !player.mesh || !player.mesh.userData.hpBarFill) return;
   const ratio = Math.max(0, Math.min(1, player.hp / 100));
@@ -1698,6 +1879,7 @@ function disposeObjectTree(obj) {
 function clearGameWorld() {
   for (const player of players) {
     if (player.satelliteBeam) disposeObjectTree(player.satelliteBeam);
+    if (player.planeShadow) disposeObjectTree(player.planeShadow);
     if (player.mesh) disposeObjectTree(player.mesh);
   }
   for (const bullet of bullets) {
@@ -1709,11 +1891,17 @@ function clearGameWorld() {
   for (const rock of rocks) {
     if (rock.mesh) disposeObjectTree(rock.mesh);
   }
+  for (const structure of structures) {
+    if (structure.mesh) disposeObjectTree(structure.mesh);
+  }
   for (const pack of healthPacks) {
     if (pack.mesh) disposeObjectTree(pack.mesh);
   }
   for (const patch of grassPatches) {
     if (patch.mesh) disposeObjectTree(patch.mesh);
+  }
+  for (const pickup of itemPickups) {
+    if (pickup.mesh) disposeObjectTree(pickup.mesh);
   }
   if (poisonCircle) disposeObjectTree(poisonCircle);
   if (satellitePickup && satellitePickup.mesh) disposeObjectTree(satellitePickup.mesh);
@@ -1722,8 +1910,10 @@ function clearGameWorld() {
   bullets = [];
   mines = [];
   rocks = [];
+  structures = [];
   healthPacks = [];
   grassPatches = [];
+  itemPickups = [];
   poisonCircle = null;
   satellitePickup = null;
   clearNeutralDog();
@@ -1746,6 +1936,199 @@ function clearGameWorld() {
   }
 }
 
+function getPlayerTotalShield(player) {
+  return Math.max(0, player.shield || 0) + Math.max(0, player.tempShield || 0);
+}
+
+function isPlayerAirborne(player) {
+  return !!(player && player.plane && player.plane.active);
+}
+
+function isRamActive(player) {
+  return !!(player && player.ram && player.ram.active);
+}
+
+function getPlayerDamageMultiplier(player) {
+  let mult = player.damageMultiplier || 1;
+  if (player.boiling && player.boiling.active) mult *= 2;
+  return mult;
+}
+
+function updatePlayerEffectVisuals() {
+  const now = performance.now();
+  for (const player of players) {
+    if (!player || !player.mesh) continue;
+    player.mesh.position.y = isPlayerAirborne(player) ? PLANE_HEIGHT : 0;
+    if (player.planeShadow) {
+      const visible = player.alive && player.mesh.visible !== false && isPlayerAirborne(player);
+      player.planeShadow.visible = visible;
+      if (visible) {
+        const pulse = 1 + Math.sin(now * 0.006 + player.index) * 0.08;
+        player.planeShadow.position.set(player.mesh.position.x, 0.08, player.mesh.position.z);
+        player.planeShadow.scale.set(PLANE_SHADOW_SCALE * pulse, PLANE_SHADOW_SCALE * pulse, 1);
+      }
+    }
+  }
+}
+
+function addItemToInventory(player, itemId) {
+  if (!player || !itemId || player.inventory.length >= ITEM_SLOT_COUNT) return false;
+  player.inventory.push(itemId);
+  return true;
+}
+
+function removeInventorySlot(player, slotIndex) {
+  if (!player || slotIndex < 0 || slotIndex >= player.inventory.length) return null;
+  const removed = player.inventory[slotIndex];
+  player.inventory.splice(slotIndex, 1);
+  return removed;
+}
+
+function clearRamState(player) {
+  if (!player || !player.ram) return;
+  player.ram.active = false;
+  player.ram.endsAt = 0;
+  player.ram.dashing = false;
+  player.ram.dashEndsAt = 0;
+  player.ram.dashCooldownAt = 0;
+  player.ram.lastHitAt = 0;
+  player.ram.lastHitTarget = -1;
+}
+
+function isTankPositionClear(x, z, ignoreIndex = -1) {
+  const dist = Math.hypot(x, z);
+  if (dist > MAP_RADIUS - 2) return false;
+  for (const rock of rocks) {
+    if (Math.hypot(x - rock.x, z - rock.z) < rock.radius + TANK_RADIUS + 0.25) return false;
+  }
+  for (const player of players) {
+    if (!player || !player.alive || !player.mesh || player.index === ignoreIndex || isPlayerAirborne(player)) continue;
+    if (Math.hypot(x - player.mesh.position.x, z - player.mesh.position.z) < TANK_RADIUS * 2 + 0.35) return false;
+  }
+  return true;
+}
+
+function findNearestLandingPosition(x, z, ignoreIndex = -1) {
+  const clamped = {
+    x: THREE.MathUtils.clamp(x, -MAP_HALF + 2, MAP_HALF - 2),
+    z: THREE.MathUtils.clamp(z, -MAP_HALF + 2, MAP_HALF - 2)
+  };
+  if (isTankPositionClear(clamped.x, clamped.z, ignoreIndex)) return clamped;
+  for (let radius = 2; radius <= 24; radius += 2) {
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 12) {
+      const testX = THREE.MathUtils.clamp(clamped.x + Math.cos(angle) * radius, -MAP_HALF + 2, MAP_HALF - 2);
+      const testZ = THREE.MathUtils.clamp(clamped.z + Math.sin(angle) * radius, -MAP_HALF + 2, MAP_HALF - 2);
+      if (isTankPositionClear(testX, testZ, ignoreIndex)) {
+        return { x: testX, z: testZ };
+      }
+    }
+  }
+  return findSafeSpawnPosition(20, 8, 8, 8);
+}
+
+function landPlayerFromPlane(player) {
+  if (!player || !player.plane || !player.plane.active) return false;
+  player.plane.active = false;
+  player.plane.endsAt = 0;
+  player.plane.lastBombAt = 0;
+  if (player.mesh) {
+    const landing = findNearestLandingPosition(player.mesh.position.x, player.mesh.position.z, player.index);
+    player.mesh.position.set(landing.x, 0, landing.z);
+    player.x = landing.x;
+    player.z = landing.z;
+    player.rotation = player.mesh.rotation.y;
+  }
+  return true;
+}
+
+function activateBoilingBlood(player) {
+  if (!player || !player.boiling) return false;
+  player.boiling.active = true;
+  player.boiling.endsAt = performance.now() + BOILING_BLOOD_DURATION;
+  return true;
+}
+
+function activateTemporaryShield(player) {
+  if (!player) return false;
+  player.tempShield = ITEM_SHIELD_VALUE;
+  player.tempShieldExpiresAt = performance.now() + ITEM_SHIELD_DURATION;
+  return true;
+}
+
+function activatePlane(player) {
+  if (!player || !player.mesh || !player.plane || player.usingSatellite || player.satelliteFiring || player.plane.active) return false;
+  clearRamState(player);
+  player.scoping = false;
+  player.plane.active = true;
+  player.plane.endsAt = performance.now() + PLANE_DURATION;
+  player.plane.lastBombAt = performance.now();
+  if (player.index === localPlayerIndex) scoping = false;
+  return true;
+}
+
+function activateRam(player) {
+  if (!player || !player.ram || player.usingSatellite || player.satelliteFiring || player.plane.active) return false;
+  player.scoping = false;
+  player.ram.active = true;
+  player.ram.endsAt = performance.now() + RAM_DURATION;
+  player.ram.dashing = false;
+  player.ram.dashEndsAt = 0;
+  player.ram.dashCooldownAt = 0;
+  player.ram.lastHitAt = 0;
+  player.ram.lastHitTarget = -1;
+  if (player.index === localPlayerIndex) scoping = false;
+  return true;
+}
+
+function triggerRamDash(player) {
+  if (!player || !player.ram || !player.ram.active || player.ram.dashing) return false;
+  const now = performance.now();
+  if (now < player.ram.dashCooldownAt) return false;
+  player.ram.dashing = true;
+  player.ram.dashEndsAt = now + RAM_DASH_DURATION;
+  player.ram.dashCooldownAt = now + RAM_DASH_CD;
+  player.scoping = false;
+  if (player.index === localPlayerIndex) scoping = false;
+  return true;
+}
+
+function tryUseInventorySlot(player, slotIndex) {
+  if (!player || !player.alive) return false;
+  const itemId = player.inventory[slotIndex];
+  if (!itemId || !ITEM_DEFS[itemId]) return false;
+
+  let used = false;
+  if (itemId === 'boiling') used = activateBoilingBlood(player);
+  else if (itemId === 'plane') used = activatePlane(player);
+  else if (itemId === 'shield') used = activateTemporaryShield(player);
+  else if (itemId === 'ram') used = activateRam(player);
+  if (!used) return false;
+
+  removeInventorySlot(player, slotIndex);
+  updateHUD();
+  if (isHost) {
+    const text = `${getPlayerDisplayName(player.index)}使用了${ITEM_DEFS[itemId].name}`;
+    showAnnouncement(text);
+    broadcast({ t: 'announce', text });
+  }
+  return true;
+}
+
+function getRequestedItemSlotFromInput(input) {
+  if (!input) return -1;
+  if (input.i0) return 0;
+  if (input.i1) return 1;
+  if (input.i2) return 2;
+  return -1;
+}
+
+function getLocalRequestedItemSlot() {
+  if (isCodeJustPressed('Digit1') || (mobileInput.item0 && !prevMobileInput.item0)) return 0;
+  if (isCodeJustPressed('Digit2') || (mobileInput.item1 && !prevMobileInput.item1)) return 1;
+  if (isCodeJustPressed('Digit3') || (mobileInput.item2 && !prevMobileInput.item2)) return 2;
+  return -1;
+}
+
 function createBulletVisual(bullet) {
   const geo = new THREE.SphereGeometry(bullet.size, 8, 8);
   const mat = new THREE.MeshBasicMaterial({ color: bullet.color });
@@ -1758,6 +2141,7 @@ function createBulletVisual(bullet) {
 
 function buildProjectilesFromPlayer(player, now = performance.now()) {
   const weapon = WEAPONS[player.weapon];
+  if (isRamActive(player)) return [];
   if (now - player.lastShot < weapon.cd) return [];
   player.lastShot = now;
 
@@ -1785,7 +2169,7 @@ function buildProjectilesFromPlayer(player, now = performance.now()) {
       z: muzzlePos.z,
       vx: dir.x * weapon.speed,
       vz: dir.z * weapon.speed,
-      dmg: weapon.dmg * (player.damageMultiplier || 1),
+      dmg: weapon.dmg * getPlayerDamageMultiplier(player),
       color: weapon.color,
       size: weapon.size,
       owner: player.index,
@@ -1861,6 +2245,9 @@ function spawnBulletFromState(data) {
 function sendImmediateClientInput() {
   if (isHost || !gameStarted || localPlayerIndex < 0) return;
   sendToHost({ t: 'input', p: localPlayerIndex, input: buildClientInput() });
+  if (mobileInput.satTapPending) {
+    mobileInput.satTapPending = false;
+  }
   lastSentInputAt = performance.now();
 }
 
@@ -1876,12 +2263,56 @@ function createRockFromConfig(config) {
   return { mesh, x: config.x, z: config.z, radius: scale * 2, scale };
 }
 
+function createHouseFromConfig(config) {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(8, 5.2, 8),
+    new THREE.MeshStandardMaterial({ color: 0x9b7a58, roughness: 0.86 })
+  );
+  body.position.y = 2.6;
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(body);
+
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(6.4, 3.2, 4),
+    new THREE.MeshStandardMaterial({ color: 0x6e3d2b, roughness: 0.8 })
+  );
+  roof.rotation.y = Math.PI / 4;
+  roof.position.y = 6.1;
+  roof.castShadow = true;
+  roof.receiveShadow = true;
+  group.add(roof);
+
+  group.position.set(config.x, 0, config.z);
+  scene.add(group);
+  return {
+    mesh: group,
+    id: config.id,
+    x: config.x,
+    z: config.z,
+    radius: 5.2,
+    hp: typeof config.hp === 'number' ? config.hp : 1000,
+    active: config.active !== false,
+    destructible: true
+  };
+}
+
 function buildCurrentMapConfig() {
   return {
     rocks: rocks.map((rock) => ({ x: rock.x, z: rock.z, scale: rock.scale || (rock.radius / 2) })),
+    structures: structures.map((structure) => ({ id: structure.id, x: structure.x, z: structure.z, hp: structure.hp, active: structure.active })),
     healthPacks: healthPacks.map((pack) => ({ x: pack.x, z: pack.z, bobOffset: pack.bobOffset || 0 })),
     grassPatches: grassPatches.map((patch) => ({ x: patch.x, z: patch.z, radius: patch.radius })),
-    satellitePickup: satellitePickup ? { x: satellitePickup.x, z: satellitePickup.z, rotOffset: satellitePickup.rotOffset || 0 } : null
+    satellitePickup: satellitePickup ? { x: satellitePickup.x, z: satellitePickup.z, rotOffset: satellitePickup.rotOffset || 0 } : null,
+    itemPickups: itemPickups.map((pickup, index) => ({
+      id: index,
+      type: pickup.type,
+      x: pickup.x,
+      z: pickup.z,
+      rotOffset: pickup.rotOffset || 0,
+      bobOffset: pickup.bobOffset || 0
+    }))
   };
 }
 
@@ -1969,6 +2400,20 @@ function spawnHealthPacks(layout = null) {
   }
 }
 
+function spawnStructures(layout = null) {
+  structures = [];
+  if (Array.isArray(layout) && layout.length) {
+    for (const config of layout) {
+      structures.push(createHouseFromConfig(config));
+    }
+    return;
+  }
+  for (let i = 0; i < 4; i++) {
+    const pos = findSafeSpawnPosition(28, 9, 8, 10);
+    structures.push(createHouseFromConfig({ id: i, x: pos.x, z: pos.z, hp: 1000, active: true }));
+  }
+}
+
 function createGrassPatch(x, z, radius) {
   const group = new THREE.Group();
   const baseGeo = new THREE.CylinderGeometry(radius, radius, 0.14, 16);
@@ -2025,6 +2470,9 @@ function findSafeSpawnPosition(minFromCenter, minRockDist, minGrassDist, minPack
     for (const rock of rocks) {
       if (Math.sqrt((x-rock.x)**2 + (z-rock.z)**2) < minRockDist + rock.radius) valid = false;
     }
+    for (const structure of structures) {
+      if (structure.active !== false && Math.sqrt((x-structure.x)**2 + (z-structure.z)**2) < minRockDist + structure.radius) valid = false;
+    }
     for (const patch of grassPatches) {
       if (Math.sqrt((x-patch.x)**2 + (z-patch.z)**2) < minGrassDist + patch.radius) valid = false;
     }
@@ -2034,6 +2482,44 @@ function findSafeSpawnPosition(minFromCenter, minRockDist, minGrassDist, minPack
     attempts++;
   } while (!valid && attempts < 100);
   return { x, z };
+}
+
+function getItemColorHex(itemId) {
+  const def = ITEM_DEFS[itemId] || ITEM_DEFS.boiling;
+  return parseInt(def.color.slice(1), 16);
+}
+
+function findSafeItemPickupPosition(ignorePickupId = -1) {
+  let attempts = 0;
+  while (attempts < 180) {
+    attempts += 1;
+    const x = (Math.random() - 0.5) * MAP_HALF * 2;
+    const z = (Math.random() - 0.5) * MAP_HALF * 2;
+    let valid = true;
+
+    if (Math.hypot(x, z) < 24 || Math.hypot(x, z) > MAP_RADIUS - 8) valid = false;
+    for (const rock of rocks) {
+      if (Math.hypot(x - rock.x, z - rock.z) < rock.radius + 6.5) valid = false;
+    }
+    for (const patch of grassPatches) {
+      if (Math.hypot(x - patch.x, z - patch.z) < patch.radius + 5) valid = false;
+    }
+    for (const pack of healthPacks) {
+      if (Math.hypot(x - pack.x, z - pack.z) < 8.5) valid = false;
+    }
+    if (satellitePickup && satellitePickup.mesh && satellitePickup.mesh.visible && Math.hypot(x - satellitePickup.x, z - satellitePickup.z) < 10) valid = false;
+    for (let i = 0; i < itemPickups.length; i++) {
+      const pickup = itemPickups[i];
+      if (!pickup || i === ignorePickupId || !pickup.active) continue;
+      if (Math.hypot(x - pickup.x, z - pickup.z) < 9.5) valid = false;
+    }
+    for (const player of players) {
+      if (!player || !player.alive || !player.mesh) continue;
+      if (Math.hypot(x - player.mesh.position.x, z - player.mesh.position.z) < 11) valid = false;
+    }
+    if (valid) return { x, z };
+  }
+  return findSafeSpawnPosition(24, 8, 10, 8);
 }
 
 function createSatellitePickup(x, z, rotOffset = Math.random() * Math.PI * 2) {
@@ -2078,6 +2564,133 @@ function spawnSatellitePickup(config = null) {
   }
   const pos = findSafeSpawnPosition(30, 8, 10, 8);
   satellitePickup = createSatellitePickup(pos.x, pos.z);
+}
+
+function createItemPickup(type, x, z, rotOffset = Math.random() * Math.PI * 2, bobOffset = Math.random() * Math.PI * 2) {
+  const color = getItemColorHex(type);
+  const group = new THREE.Group();
+
+  const base = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.7, 1.95, 0.24, 18),
+    new THREE.MeshStandardMaterial({ color: 0x10192b, roughness: 0.88, metalness: 0.16 })
+  );
+  base.position.y = 0.12;
+  base.receiveShadow = true;
+  group.add(base);
+
+  const core = new THREE.Mesh(
+    new THREE.OctahedronGeometry(1.08),
+    new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.7,
+      metalness: 0.42,
+      roughness: 0.25
+    })
+  );
+  core.position.y = 1.72;
+  core.castShadow = true;
+  group.add(core);
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(1.58, 0.12, 10, 32),
+    new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.4, metalness: 0.24, roughness: 0.4 })
+  );
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 1.72;
+  ring.castShadow = true;
+  group.add(ring);
+
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(2.1, 16, 16),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.15 })
+  );
+  glow.position.y = 1.72;
+  group.add(glow);
+
+  group.position.set(x, 0, z);
+  scene.add(group);
+  return { mesh: group, type, x, z, rotOffset, bobOffset, active: true, respawnAt: 0 };
+}
+
+function applyItemPickupConfig(pickup, config, index = 0) {
+  const nextType = config.type || ITEM_IDS[0];
+  if (!pickup || pickup.type !== nextType || !pickup.mesh) {
+    if (pickup && pickup.mesh) disposeObjectTree(pickup.mesh);
+    pickup = createItemPickup(nextType, config.x, config.z, config.rotOffset, config.bobOffset);
+  }
+  pickup.id = Number.isInteger(config.id) ? config.id : index;
+  pickup.type = nextType;
+  pickup.x = config.x;
+  pickup.z = config.z;
+  pickup.rotOffset = typeof config.rotOffset === 'number' ? config.rotOffset : pickup.rotOffset || 0;
+  pickup.bobOffset = typeof config.bobOffset === 'number' ? config.bobOffset : pickup.bobOffset || 0;
+  pickup.active = config.active !== false;
+  pickup.respawnAt = typeof config.respawnAt === 'number' ? config.respawnAt : 0;
+  pickup.mesh.visible = pickup.active;
+  pickup.mesh.position.set(pickup.x, pickup.active ? 0 : pickup.mesh.position.y, pickup.z);
+  return pickup;
+}
+
+function respawnItemPickup(pickup) {
+  const pos = findSafeItemPickupPosition(pickup.id);
+  const type = ITEM_IDS[Math.floor(Math.random() * ITEM_IDS.length)];
+  const nextPickup = applyItemPickupConfig(pickup, {
+    id: pickup.id,
+    type,
+    x: pos.x,
+    z: pos.z,
+    rotOffset: Math.random() * Math.PI * 2,
+    bobOffset: Math.random() * Math.PI * 2,
+    active: true,
+    respawnAt: 0
+  }, pickup.id);
+  itemPickups[pickup.id] = nextPickup;
+  return nextPickup;
+}
+
+function spawnItemPickups(layout = null) {
+  itemPickups = [];
+  if (Array.isArray(layout) && layout.length) {
+    for (let i = 0; i < layout.length; i++) {
+      itemPickups.push(applyItemPickupConfig(null, layout[i], i));
+    }
+    return;
+  }
+  for (let i = 0; i < ITEM_PICKUP_COUNT; i++) {
+    const pos = findSafeItemPickupPosition(i);
+    const type = ITEM_IDS[Math.floor(Math.random() * ITEM_IDS.length)];
+    itemPickups.push(applyItemPickupConfig(null, {
+      id: i,
+      type,
+      x: pos.x,
+      z: pos.z,
+      rotOffset: Math.random() * Math.PI * 2,
+      bobOffset: Math.random() * Math.PI * 2,
+      active: true,
+      respawnAt: 0
+    }, i));
+  }
+}
+
+function syncItemPickupsFromState(states = []) {
+  const nextPickups = [];
+  for (let i = 0; i < states.length; i++) {
+    nextPickups.push(applyItemPickupConfig(itemPickups[i] || null, {
+      id: states[i].id,
+      type: states[i].tp || states[i].type,
+      x: states[i].x,
+      z: states[i].z,
+      rotOffset: states[i].ro,
+      bobOffset: states[i].bo,
+      active: states[i].a,
+      respawnAt: 0
+    }, i));
+  }
+  for (let i = states.length; i < itemPickups.length; i++) {
+    if (itemPickups[i] && itemPickups[i].mesh) disposeObjectTree(itemPickups[i].mesh);
+  }
+  itemPickups = nextPickups;
 }
 
 function clearNeutralDog() {
@@ -2243,6 +2856,77 @@ function updatePlayerBuffs(dt) {
   }
 }
 
+function dropPlaneBomb(player) {
+  if (!player || !player.mesh) return;
+  for (const target of players) {
+    if (!target || !target.alive || !target.mesh || target.index === player.index || isPlayerAirborne(target)) continue;
+    const dx = target.mesh.position.x - player.mesh.position.x;
+    const dz = target.mesh.position.z - player.mesh.position.z;
+    if (Math.hypot(dx, dz) <= PLANE_BOMB_RADIUS) {
+      applyDamageWithContext(target, PLANE_BOMB_DAMAGE, { source: 'plane-bomb' });
+    }
+  }
+  if (enableNeutralDog && neutralDog && neutralDog.alive) {
+    const ddx = neutralDog.group.position.x - player.mesh.position.x;
+    const ddz = neutralDog.group.position.z - player.mesh.position.z;
+    if (Math.hypot(ddx, ddz) <= PLANE_BOMB_RADIUS) {
+      damageNeutralDog(PLANE_BOMB_DAMAGE, player.index);
+    }
+  }
+}
+
+function updateItemEffects(dt) {
+  const now = performance.now();
+  const boilingDrainPerSecond = BOILING_BLOOD_DRAIN / (BOILING_BLOOD_DURATION / 1000);
+  for (const player of players) {
+    if (!player) continue;
+    if (player.tempShieldExpiresAt && now >= player.tempShieldExpiresAt) {
+      player.tempShield = 0;
+      player.tempShieldExpiresAt = 0;
+    }
+    if (!player.alive) {
+      if (player.boiling) {
+        player.boiling.active = false;
+        player.boiling.endsAt = 0;
+      }
+      if (player.plane) {
+        player.plane.active = false;
+        player.plane.endsAt = 0;
+        player.plane.lastBombAt = 0;
+      }
+      clearRamState(player);
+      continue;
+    }
+
+    if (player.boiling && player.boiling.active) {
+      if (now >= player.boiling.endsAt) {
+        player.boiling.active = false;
+        player.boiling.endsAt = 0;
+      } else {
+        applyDamageWithContext(player, boilingDrainPerSecond * dt, { source: 'boiling', bypassAirborne: true, ignoreRamReduction: true, bypassShield: true });
+      }
+    }
+
+    if (player.plane && player.plane.active) {
+      if (now >= player.plane.endsAt) {
+        landPlayerFromPlane(player);
+      } else if (!player.plane.lastBombAt || now - player.plane.lastBombAt >= PLANE_BOMB_INTERVAL) {
+        player.plane.lastBombAt = now;
+        dropPlaneBomb(player);
+      }
+    }
+
+    if (player.ram && player.ram.active) {
+      if (now >= player.ram.endsAt) {
+        clearRamState(player);
+      } else if (player.ram.dashing && now >= player.ram.dashEndsAt) {
+        player.ram.dashing = false;
+        player.ram.dashEndsAt = 0;
+      }
+    }
+  }
+}
+
 function updateNeutralDog(dt) {
   if (!enableNeutralDog || !neutralDog || !neutralDog.alive) return;
   updateNeutralDogVisuals();
@@ -2323,27 +3007,59 @@ function syncNeutralDogFromState(state) {
 
 // ============== GAME MECHANICS ==============
 function applyDamage(player, dmg) {
-  if (!player.alive) return;
+  return applyDamageWithContext(player, dmg, {});
+}
+
+function applyDamageWithContext(player, dmg, meta = {}) {
+  if (!player || !player.alive || dmg <= 0) return 0;
+  if (isPlayerAirborne(player) && meta.source !== 'satellite' && !meta.bypassAirborne) return 0;
+  let remaining = dmg;
+  if (isRamActive(player) && !meta.ignoreRamReduction) remaining *= RAM_DAMAGE_TAKEN_MULT;
+  if (remaining <= 0) return 0;
+
   player.lastDamagedAt = performance.now();
-  if (player.shield > 0) {
-    const absorbed = Math.min(player.shield, dmg);
-    player.shield -= absorbed;
-    dmg -= absorbed;
+  const appliedAmount = remaining;
+  if (!meta.bypassShield) {
+    if (player.tempShield > 0) {
+      const absorbedTemp = Math.min(player.tempShield, remaining);
+      player.tempShield -= absorbedTemp;
+      remaining -= absorbedTemp;
+      if (player.tempShield <= 0.001) player.tempShield = 0;
+    }
+    if (player.shield > 0) {
+      const absorbed = Math.min(player.shield, remaining);
+      player.shield -= absorbed;
+      remaining -= absorbed;
+    }
   }
-  player.hp -= dmg;
+  player.hp -= remaining;
   player.hitT = 1;
   if (player.hp <= 0) {
     player.hp = 0;
     player.alive = false;
+    if (player.boiling) {
+      player.boiling.active = false;
+      player.boiling.endsAt = 0;
+    }
+    if (player.plane) {
+      player.plane.active = false;
+      player.plane.endsAt = 0;
+      player.plane.lastBombAt = 0;
+    }
+    clearRamState(player);
+    player.tempShield = 0;
+    player.tempShieldExpiresAt = 0;
     playTankDiedSound();
     if (player.mesh) {
       player.mesh.visible = false;
     }
+    if (player.planeShadow) player.planeShadow.visible = false;
     if (isHost) {
       checkWinner();
     }
   }
   updateHUD();
+  return appliedAmount;
 }
 
 function getPlayerDisplayName(index) {
@@ -2352,9 +3068,14 @@ function getPlayerDisplayName(index) {
 
 function getPlayerStatusText(player) {
   const parts = [];
-  if (player.shield > 0) parts.push(`护盾 ${Math.round(player.shield)}`);
-  if (player.damageMultiplier > 1) parts.push('攻击 x2');
+  const totalShield = getPlayerTotalShield(player);
+  if (totalShield > 0) parts.push(`护盾 ${Math.round(totalShield)}`);
+  const totalDamageMult = getPlayerDamageMultiplier(player);
+  if (totalDamageMult > 1) parts.push(`攻击 x${String(Number(totalDamageMult.toFixed(2))).replace(/\.0+$/, '')}`);
   if (player.regenBuff) parts.push('再生');
+  if (player.boiling && player.boiling.active) parts.push('沸血');
+  if (player.plane && player.plane.active) parts.push('空袭中');
+  if (player.ram && player.ram.active) parts.push(player.ram.dashing ? '冲撞突进' : '冲撞');
   return parts.length ? parts.join(' · ') : '状态：无';
 }
 
@@ -2505,7 +3226,7 @@ function createMine(player) {
     x: pos.x,
     z: pos.z,
     owner: player.index,
-    dmg: MINE_DAMAGE * (player.damageMultiplier || 1),
+    dmg: MINE_DAMAGE * getPlayerDamageMultiplier(player),
     armed: false,
     mesh: null
   };
@@ -2641,8 +3362,24 @@ function obbOverlap(a, b) {
   return { overlap: minOverlap, nx: sepX, nz: sepZ };
 }
 
+function tryApplyRamImpact(attacker, target, nx, nz) {
+  if (!attacker || !target || !attacker.alive || !target.alive || !attacker.ram || !attacker.ram.active) return false;
+  const now = performance.now();
+  if (attacker.ram.lastHitTarget === target.index && now - attacker.ram.lastHitAt < RAM_IMPACT_CD) return false;
+  attacker.ram.lastHitAt = now;
+  attacker.ram.lastHitTarget = target.index;
+  applyDamageWithContext(target, RAM_HIT_DAMAGE, { source: 'ram', ignoreRamReduction: true });
+  applyDamageWithContext(attacker, RAM_SELF_DAMAGE, { source: 'ram-self', ignoreRamReduction: true, bypassAirborne: true });
+  const knockback = RAM_KNOCKBACK_DISTANCE + (attacker.ram.dashing ? 1.5 : 0);
+  target.mesh.position.x += nx * knockback;
+  target.mesh.position.z += nz * knockback;
+  keepTankInBounds(target);
+  resolveRockCollisions(target);
+  return true;
+}
+
 function resolveTankCollisions() {
-  const alivePlayers = players.filter(p => p.alive && p.mesh);
+  const alivePlayers = players.filter(p => p.alive && p.mesh && !isPlayerAirborne(p));
   for (let iter = 0; iter < 4; iter++) {
     for (let i = 0; i < alivePlayers.length; i++) {
       for (let j = i + 1; j < alivePlayers.length; j++) {
@@ -2668,14 +3405,17 @@ function resolveTankCollisions() {
         keepTankInBounds(p2);
 
         const now = performance.now();
-        if (enableCollisionDamage) {
+        const ramTriggeredP1 = tryApplyRamImpact(p1, p2, -nx, -nz);
+        const ramTriggeredP2 = tryApplyRamImpact(p2, p1, nx, nz);
+        const ramTriggered = ramTriggeredP1 || ramTriggeredP2;
+        if (enableCollisionDamage && !ramTriggered) {
           if (now - p1.lastCollisionDmgTime > COLLISION_DAMAGE_CD) {
             p1.lastCollisionDmgTime = now;
-            applyDamage(p1, COLLISION_DAMAGE);
+            applyDamageWithContext(p1, COLLISION_DAMAGE, { source: 'collision' });
           }
           if (now - p2.lastCollisionDmgTime > COLLISION_DAMAGE_CD) {
             p2.lastCollisionDmgTime = now;
-            applyDamage(p2, COLLISION_DAMAGE);
+            applyDamageWithContext(p2, COLLISION_DAMAGE, { source: 'collision' });
           }
         }
       }
@@ -2684,6 +3424,7 @@ function resolveTankCollisions() {
 }
 
 function resolveRockCollisions(player) {
+  if (!player || !player.mesh || isPlayerAirborne(player)) return;
   const pos = player.mesh.position;
   const now = performance.now();
   for (const rock of rocks) {
@@ -2700,9 +3441,22 @@ function resolveRockCollisions(player) {
 
       if (enableCollisionDamage && now - player.lastCollisionDmgTime > COLLISION_DAMAGE_CD) {
         player.lastCollisionDmgTime = now;
-        applyDamage(player, COLLISION_DAMAGE);
-        broadcast({ t: 'dmg', p: player.index, d: COLLISION_DAMAGE, rock: true });
+        const applied = applyDamageWithContext(player, COLLISION_DAMAGE, { source: 'rock' });
+        if (applied > 0) broadcast({ t: 'dmg', p: player.index, d: COLLISION_DAMAGE, rock: true });
       }
+    }
+  }
+  for (const structure of structures) {
+    if (!structure.active) continue;
+    const dx = pos.x - structure.x;
+    const dz = pos.z - structure.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    const minDist = TANK_RADIUS + structure.radius;
+    if (dist < minDist && dist > 0.01) {
+      const nx = dx / dist;
+      const nz = dz / dist;
+      pos.x = structure.x + nx * minDist;
+      pos.z = structure.z + nz * minDist;
     }
   }
 }
@@ -2712,12 +3466,14 @@ function updateGrassStealth() {
   for (const player of players) {
     if (!player.alive || !player.mesh) continue;
     let inGrass = false;
-    for (const patch of grassPatches) {
-      const dx = player.mesh.position.x - patch.x;
-      const dz = player.mesh.position.z - patch.z;
-      if (Math.sqrt(dx * dx + dz * dz) < patch.radius) {
-        inGrass = true;
-        break;
+    if (!isPlayerAirborne(player)) {
+      for (const patch of grassPatches) {
+        const dx = player.mesh.position.x - patch.x;
+        const dz = player.mesh.position.z - patch.z;
+        if (Math.sqrt(dx * dx + dz * dz) < patch.radius) {
+          inGrass = true;
+          break;
+        }
       }
     }
     player.inGrass = inGrass;
@@ -2741,6 +3497,7 @@ function updateHealthPacks(dt) {
 
     for (const player of players) {
       if (!player.alive || !player.mesh) continue;
+      if (isPlayerAirborne(player)) continue;
       const dx = player.mesh.position.x - pack.x;
       const dz = player.mesh.position.z - pack.z;
       if (Math.sqrt(dx * dx + dz * dz) < 3) {
@@ -2780,13 +3537,14 @@ function updateMines(dt) {
       
       for (const player of players) {
         if (!player.alive || !player.mesh) continue;
+        if (isPlayerAirborne(player)) continue;
         const dx = player.mesh.position.x - mine.x;
         const dz = player.mesh.position.z - mine.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
         
         if (dist < TANK_RADIUS + MINE_RADIUS) {
-          applyDamage(player, mine.dmg || MINE_DAMAGE);
-          broadcast({ t: 'dmg', p: player.index, d: mine.dmg || MINE_DAMAGE, m: true });
+          const applied = applyDamageWithContext(player, mine.dmg || MINE_DAMAGE, { source: 'mine' });
+          if (applied > 0) broadcast({ t: 'dmg', p: player.index, d: mine.dmg || MINE_DAMAGE, m: true });
           
           mine.mesh.visible = false;
           mine.armed = false;
@@ -2825,7 +3583,7 @@ function updateSatellitePickup(dt) {
   if (!satellitePickup.mesh.visible) return;
 
   for (const player of players) {
-    if (!player.alive || !player.mesh || player.usingSatellite) continue;
+    if (!player.alive || !player.mesh || player.usingSatellite || isPlayerAirborne(player)) continue;
     const dx = player.mesh.position.x - satellitePickup.x;
     const dz = player.mesh.position.z - satellitePickup.z;
     if (Math.sqrt(dx * dx + dz * dz) < 3) {
@@ -2842,6 +3600,42 @@ function updateSatellitePickup(dt) {
       satellitePickup.respawnAt = 0;
       broadcast({ t: 'satpick', p: player.index });
       break;
+    }
+  }
+}
+
+function updateItemPickups(dt) {
+  const now = performance.now();
+  for (const pickup of itemPickups) {
+    if (!pickup || !pickup.mesh) continue;
+
+    if (pickup.active) {
+      pickup.mesh.visible = true;
+      pickup.mesh.rotation.y += dt * 1.25;
+      pickup.mesh.position.set(pickup.x, Math.sin(now * 0.003 + pickup.bobOffset) * 0.18, pickup.z);
+
+      if (isHost) {
+        for (const player of players) {
+          if (!player || !player.alive || !player.mesh || isPlayerAirborne(player)) continue;
+          if (player.inventory.length >= ITEM_SLOT_COUNT) continue;
+          const dx = player.mesh.position.x - pickup.x;
+          const dz = player.mesh.position.z - pickup.z;
+          if (Math.hypot(dx, dz) < 3.1 && addItemToInventory(player, pickup.type)) {
+            pickup.active = false;
+            pickup.respawnAt = now + ITEM_PICKUP_RESPAWN;
+            pickup.mesh.visible = false;
+            pickup.mesh.position.y = 0;
+            updateHUD();
+            break;
+          }
+        }
+      }
+    } else {
+      pickup.mesh.visible = false;
+      pickup.mesh.position.y = 0;
+      if (isHost && pickup.respawnAt && now >= pickup.respawnAt) {
+        respawnItemPickup(pickup);
+      }
     }
   }
 }
@@ -2902,23 +3696,25 @@ function updateSatellitePlayers(dt) {
     for (const target of players) {
       if (!target.alive || !target.mesh) continue;
       if (player.satelliteHitTargets.has(target.index)) continue;
-      const dx = target.mesh.position.x - player.satelliteTarget.x;
-      const dz = target.mesh.position.z - player.satelliteTarget.z;
-      if (Math.sqrt(dx * dx + dz * dz) <= SATELLITE_RADIUS) {
-        applyDamage(target, SATELLITE_DAMAGE * (player.damageMultiplier || 1));
+        const dx = target.mesh.position.x - player.satelliteTarget.x;
+        const dz = target.mesh.position.z - player.satelliteTarget.z;
+        if (Math.sqrt(dx * dx + dz * dz) <= SATELLITE_RADIUS) {
+        const damage = SATELLITE_DAMAGE * getPlayerDamageMultiplier(player);
+        const applied = applyDamageWithContext(target, damage, { source: 'satellite' });
+        if (target.plane && target.plane.active) landPlayerFromPlane(target);
         player.satelliteHitTargets.add(target.index);
-        broadcast({ t: 'dmg', p: target.index, d: SATELLITE_DAMAGE * (player.damageMultiplier || 1), s: true });
+        if (applied > 0) broadcast({ t: 'dmg', p: target.index, d: damage, s: true });
+        }
       }
-    }
 
-    if (enableNeutralDog && neutralDog && neutralDog.alive && !player.satelliteHitDog) {
-      const ddx = neutralDog.group.position.x - player.satelliteTarget.x;
-      const ddz = neutralDog.group.position.z - player.satelliteTarget.z;
-      if (Math.sqrt(ddx * ddx + ddz * ddz) <= SATELLITE_RADIUS) {
-        damageNeutralDog(SATELLITE_DAMAGE * (player.damageMultiplier || 1), player.index);
+      if (enableNeutralDog && neutralDog && neutralDog.alive && !player.satelliteHitDog) {
+        const ddx = neutralDog.group.position.x - player.satelliteTarget.x;
+        const ddz = neutralDog.group.position.z - player.satelliteTarget.z;
+        if (Math.sqrt(ddx * ddx + ddz * ddz) <= SATELLITE_RADIUS) {
+        damageNeutralDog(SATELLITE_DAMAGE * getPlayerDamageMultiplier(player), player.index);
         player.satelliteHitDog = true;
+        }
       }
-    }
 
   }
 }
@@ -2937,8 +3733,8 @@ function updatePoison(dt) {
   for (const player of players) {
     if (!player.alive || !player.mesh) continue;
     if (currentRadius <= 0 || distFromCenter(player) > currentRadius) {
-      applyDamage(player, 5 * dt);
-      broadcast({ t: 'dmg', p: player.index, d: 5 * dt, poison: true });
+      const applied = applyDamageWithContext(player, 5 * dt, { source: 'poison' });
+      if (applied > 0) broadcast({ t: 'dmg', p: player.index, d: 5 * dt, poison: true });
     }
   }
 
@@ -2971,6 +3767,38 @@ function updateBullets(dt, visualOnly = false) {
       continue;
     }
 
+    let hitTerrain = false;
+    for (const rock of rocks) {
+      const dx = rock.x - b.x;
+      const dz = rock.z - b.z;
+      if (Math.sqrt(dx * dx + dz * dz) < rock.radius + b.size) {
+        hitTerrain = true;
+        break;
+      }
+    }
+    if (!hitTerrain) {
+      for (const structure of structures) {
+        if (!structure.active) continue;
+        const dx = structure.x - b.x;
+        const dz = structure.z - b.z;
+        if (Math.sqrt(dx * dx + dz * dz) < structure.radius + b.size) {
+          structure.hp -= b.dmg;
+          if (structure.hp <= 0) {
+            structure.hp = 0;
+            structure.active = false;
+            if (structure.mesh) structure.mesh.visible = false;
+          }
+          hitTerrain = true;
+          break;
+        }
+      }
+    }
+    if (hitTerrain) {
+      scene.remove(b.mesh);
+      bullets.splice(i, 1);
+      continue;
+    }
+
     if (!visualOnly && enableNeutralDog && neutralDog && neutralDog.alive) {
       const ddx = neutralDog.group.position.x - b.x;
       const ddz = neutralDog.group.position.z - b.z;
@@ -2985,12 +3813,13 @@ function updateBullets(dt, visualOnly = false) {
     // Hit players
     for (const player of players) {
       if (!player.alive || !player.mesh || player.index === b.owner) continue;
+      if (isPlayerAirborne(player)) continue;
       const dx = player.mesh.position.x - b.x;
       const dz = player.mesh.position.z - b.z;
       if (Math.sqrt(dx * dx + dz * dz) < 2.2) {
         if (!visualOnly) {
-          applyDamage(player, b.dmg);
-          broadcast({ t: 'dmg', p: player.index, d: b.dmg, b: true });
+          const applied = applyDamageWithContext(player, b.dmg, { source: 'bullet' });
+          if (applied > 0) broadcast({ t: 'dmg', p: player.index, d: b.dmg, b: true });
         }
         scene.remove(b.mesh);
         bullets.splice(i, 1);
@@ -3031,8 +3860,9 @@ function movePlayer(player, controls, dt) {
 
   let speed = player.speed;
   let turnSpeed = 1.6;
+  if (player.ram && player.ram.active) speed *= RAM_SPEED_MULT;
 
-  if (player.scoping) {
+  if (player.scoping && !(player.ram && player.ram.active)) {
     speed *= SCOPE_SPEED_MULT;
     turnSpeed *= 0.22;
   }
@@ -3046,6 +3876,18 @@ function movePlayer(player, controls, dt) {
   }
 
   if (player.boosting) speed *= BOOST_MULTIPLIER;
+
+  if (player.ram && player.ram.dashing) {
+    const dashSpeed = player.speed * RAM_SPEED_MULT * RAM_DASH_SPEED_MULT * dt;
+    player.mesh.translateZ(-dashSpeed);
+    keepTankInBounds(player);
+    if (!isPlayerAirborne(player)) resolveRockCollisions(player);
+    player.mesh.position.y = isPlayerAirborne(player) ? PLANE_HEIGHT : 0;
+    player.x = player.mesh.position.x;
+    player.z = player.mesh.position.z;
+    player.rotation = player.mesh.rotation.y;
+    return;
+  }
 
   // Turning
   const reversing = !!controls.backward && !controls.forward;
@@ -3063,7 +3905,8 @@ function movePlayer(player, controls, dt) {
   if (controls.backward) player.mesh.translateZ(backSpeed);
 
   keepTankInBounds(player);
-  resolveRockCollisions(player);
+  if (!isPlayerAirborne(player)) resolveRockCollisions(player);
+  player.mesh.position.y = isPlayerAirborne(player) ? PLANE_HEIGHT : 0;
 
   // Sync position
   player.x = player.mesh.position.x;
@@ -3288,6 +4131,15 @@ function drawSatelliteOverlay(player) {
     satelliteCtx.fill();
   }
 
+  for (const pickup of itemPickups) {
+    if (!pickup || !pickup.mesh || !pickup.mesh.visible) continue;
+    const p = worldToScreen(pickup.x, pickup.z);
+    satelliteCtx.fillStyle = ITEM_DEFS[pickup.type] ? ITEM_DEFS[pickup.type].color : '#ffffff';
+    satelliteCtx.beginPath();
+    satelliteCtx.arc(p.x, p.y, 4.2, 0, Math.PI * 2);
+    satelliteCtx.fill();
+  }
+
   if (enableNeutralDog && neutralDog && neutralDog.alive) {
     const p = worldToScreen(neutralDog.group.position.x, neutralDog.group.position.z);
     satelliteCtx.fillStyle = '#d08b42';
@@ -3411,6 +4263,14 @@ function drawMinimap() {
     ctx.fill();
   }
 
+  for (const pickup of itemPickups) {
+    if (!pickup || !pickup.mesh || !pickup.mesh.visible) continue;
+    ctx.fillStyle = ITEM_DEFS[pickup.type] ? ITEM_DEFS[pickup.type].color : '#ffffff';
+    ctx.beginPath();
+    ctx.arc(w/2 + pickup.x * scale, h/2 + pickup.z * scale, 3.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   // Mines (own only)
   for (const mine of mines) {
     if (mine.owner === localPlayerIndex && mine.armed) {
@@ -3468,6 +4328,31 @@ function drawMinimap() {
   }
 }
 
+function updateInventorySlotUI(slotEl, itemId) {
+  if (!slotEl) return;
+  const iconEl = slotEl.querySelector('.inventory-icon');
+  const nameEl = slotEl.querySelector('.inventory-name');
+  const def = itemId ? ITEM_DEFS[itemId] : null;
+  slotEl.classList.toggle('empty', !def);
+  slotEl.style.borderColor = def ? `${def.color}66` : 'rgba(255,255,255,0.12)';
+  slotEl.style.background = def ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.06)';
+  if (iconEl) {
+    iconEl.textContent = def ? def.glyph : '-';
+    iconEl.style.background = def ? def.color : 'rgba(255,255,255,0.12)';
+  }
+  if (nameEl) nameEl.textContent = def ? def.shortName : '空';
+}
+
+function updateMobileItemButtonUI(buttonEl, itemId) {
+  if (!buttonEl) return;
+  const label = buttonEl.querySelector('.slot-label');
+  const def = itemId ? ITEM_DEFS[itemId] : null;
+  buttonEl.classList.toggle('empty', !def);
+  buttonEl.style.borderColor = def ? `${def.color}88` : 'rgba(255,255,255,0.18)';
+  buttonEl.style.background = def ? 'rgba(14, 22, 38, 0.92)' : 'rgba(6, 14, 30, 0.72)';
+  if (label) label.textContent = def ? def.shortName : '空';
+}
+
 function updateHUD() {
   const player = players[localPlayerIndex];
   if (!player) return;
@@ -3481,6 +4366,12 @@ function updateHUD() {
   info.querySelector('.stamina-text').textContent = Math.round(Math.max(0, player.stamina)) + '%';
   info.querySelector('.weapon span').textContent = WEAPONS[player.weapon].name;
   info.querySelector('.status').textContent = getPlayerStatusText(player);
+  updateInventorySlotUI(document.getElementById('inv-slot-0'), player.inventory[0] || null);
+  updateInventorySlotUI(document.getElementById('inv-slot-1'), player.inventory[1] || null);
+  updateInventorySlotUI(document.getElementById('inv-slot-2'), player.inventory[2] || null);
+  updateMobileItemButtonUI(document.getElementById('mb-item-0'), player.inventory[0] || null);
+  updateMobileItemButtonUI(document.getElementById('mb-item-1'), player.inventory[1] || null);
+  updateMobileItemButtonUI(document.getElementById('mb-item-2'), player.inventory[2] || null);
 
   for (const tank of players) updateTankHpBar(tank);
 }
@@ -3598,6 +4489,10 @@ function handleMessage(data, conn) {
       if (isHost) {
         const playerIndex = data.p;
         if (players[playerIndex]) {
+          if (data.input && data.input.stp && players[playerIndex].usingSatellite && !players[playerIndex].satelliteFiring) {
+            players[playerIndex].satelliteTarget.x = THREE.MathUtils.clamp(data.input.stx, -MAP_HALF + 10, MAP_HALF - 10);
+            players[playerIndex].satelliteTarget.z = THREE.MathUtils.clamp(data.input.stz, -MAP_HALF + 10, MAP_HALF - 10);
+          }
           players[playerIndex].input = data.input;
         }
       }
@@ -3662,6 +4557,7 @@ function handleMessage(data, conn) {
     case 'satpick':
       if (!isHost && players[data.p]) {
         const player = players[data.p];
+        if (satellitePickup && satellitePickup.mesh) satellitePickup.mesh.visible = false;
         player.hasSatellite = false;
         player.usingSatellite = true;
         player.satelliteFiring = false;
@@ -3751,15 +4647,25 @@ function applyRemoteState(state) {
     }
     player.hp = ps.hp;
     player.shield = typeof ps.sh === 'number' ? ps.sh : player.shield;
+    player.tempShield = typeof ps.tsh === 'number' ? ps.tsh : player.tempShield;
     player.stamina = typeof ps.st === 'number' ? ps.st : player.stamina;
     player.damageMultiplier = typeof ps.dm === 'number' ? ps.dm : player.damageMultiplier;
     player.regenBuff = !!ps.rg;
     player.buffType = ps.bf || player.buffType;
     player.weapon = ps.w;
     player.alive = ps.alive;
+    player.inventory = Array.isArray(ps.inv) ? ps.inv.slice(0, ITEM_SLOT_COUNT) : player.inventory;
+    if (player.boiling) player.boiling.active = !!ps.bb;
+    if (player.plane) player.plane.active = !!ps.pl;
+    if (player.ram) {
+      player.ram.active = !!ps.ra;
+      player.ram.dashing = !!ps.rd;
+    }
     if (wasAlive && !player.alive) {
       playTankDiedSound();
     }
+    if (player.mesh) player.mesh.visible = !!player.alive;
+    if (!player.alive && player.planeShadow) player.planeShadow.visible = false;
     player.hasSatellite = !!ps.hs;
     player.usingSatellite = ps.us;
     player.satelliteFiring = !!ps.sf;
@@ -3785,6 +4691,15 @@ function applyRemoteState(state) {
   // Update bullets
   // (simplified - in production you'd sync bullet IDs properly)
 
+  if (Array.isArray(state.structures)) {
+    for (let i = 0; i < Math.min(structures.length, state.structures.length); i++) {
+      structures[i].hp = state.structures[i].hp;
+      structures[i].active = state.structures[i].active;
+      if (structures[i].mesh) structures[i].mesh.visible = structures[i].active;
+    }
+  }
+
+  syncItemPickupsFromState(state.items || []);
   syncNeutralDogFromState(state.dog || null);
 
   if (localPlayerIndex >= 0 && players[localPlayerIndex]) {
@@ -3803,6 +4718,9 @@ function buildClientInput() {
     fire: !!(isBoundDown('fire') || mobileInput.fire),
     mine: !!(isBoundJustPressed('mine') || (mobileInput.mine && !prevMobileInput.mine)),
     sat: false,
+    stp: !!mobileInput.satTapPending,
+    stx: mobileInput.satTapX,
+    stz: mobileInput.satTapZ,
     su: !!mobileInput.satUp,
     sd: !!mobileInput.satDown,
     sl: !!mobileInput.satLeft,
@@ -3810,6 +4728,9 @@ function buildClientInput() {
     tl: !!(keys['ArrowLeft'] || mobileInput.turretLeft),
     tr: !!(keys['ArrowRight'] || mobileInput.turretRight),
     ta: mobileInput.turretAxis || 0,
+    i0: !!(isCodeJustPressed('Digit1') || (mobileInput.item0 && !prevMobileInput.item0)),
+    i1: !!(isCodeJustPressed('Digit2') || (mobileInput.item1 && !prevMobileInput.item1)),
+    i2: !!(isCodeJustPressed('Digit3') || (mobileInput.item2 && !prevMobileInput.item2)),
     scopeToggle: !!(isBoundJustPressed('scope') || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle)),
     weaponToggle: !!(isBoundJustPressed('weaponSwitch') || (mobileInput.weaponToggle && !prevMobileInput.weaponToggle))
   };
@@ -3857,8 +4778,12 @@ function gameLoop() {
       };
       movePlayer(player, controls, dt);
       updateTurretRotation(player, controls, dt);
+      const fireJustPressed = !!input.fire && !player.prevFirePressed;
+      player.prevFirePressed = !!input.fire;
 
-      if (input.fire) {
+      if (player.ram && player.ram.active) {
+        if (fireJustPressed) triggerRamDash(player);
+      } else if (input.fire) {
         if (player.usingSatellite && !player.satelliteFiring) {
           fireSatelliteLaser(player);
         } else {
@@ -3867,6 +4792,10 @@ function gameLoop() {
       }
       if (input.mine) {
         createMine(player);
+      }
+      const itemSlot = getRequestedItemSlotFromInput(input);
+      if (itemSlot >= 0) {
+        tryUseInventorySlot(player, itemSlot);
       }
       if (input.sat && player.hasSatellite) {
         player.hasSatellite = false;
@@ -3881,7 +4810,7 @@ function gameLoop() {
       } else if (input.sat && player.usingSatellite && !player.satelliteFiring) {
         fireSatelliteLaser(player);
       }
-      if (input.scopeToggle) {
+      if (input.scopeToggle && !player.plane.active && !player.ram.active) {
         player.scoping = !player.scoping;
       }
       if (input.weaponToggle) {
@@ -3908,7 +4837,11 @@ function gameLoop() {
 
       const firePressed = !!(isBoundDown('fire') || mobileInput.fire);
       const firePrev = !!((onlineBindings.fire && prevKeys[onlineBindings.fire]) || prevMobileInput.fire);
-      if (localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
+      if (localPlayer.ram && localPlayer.ram.active) {
+        if (firePressed && !firePrev) {
+          triggerRamDash(localPlayer);
+        }
+      } else if (localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
         if (firePressed && !firePrev) {
           fireSatelliteLaser(localPlayer);
         }
@@ -3919,8 +4852,12 @@ function gameLoop() {
       if (minePressed) {
         createMine(localPlayer);
       }
+      const itemSlot = getLocalRequestedItemSlot();
+      if (itemSlot >= 0) {
+        tryUseInventorySlot(localPlayer, itemSlot);
+      }
       const scopePressed = !!(isBoundJustPressed('scope') || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle));
-      if (scopePressed) {
+      if (scopePressed && !localPlayer.plane.active && !localPlayer.ram.active) {
         localPlayer.scoping = !localPlayer.scoping;
         scoping = localPlayer.scoping;
       }
@@ -3954,12 +4891,15 @@ function gameLoop() {
     updateHealthPacks(dt);
     updateMines(dt);
     updateSatellitePickup(dt);
+    updateItemPickups(dt);
     updateSatellitePlayers(dt);
     if (enablePoisonCircle) updatePoison(dt);
     updateBullets(dt);
     updateHitFlash(dt);
     updatePlayerBuffs(dt);
+    updateItemEffects(dt);
     updateNeutralDog(dt);
+    updatePlayerEffectVisuals();
 
     // Broadcast state
     const now = performance.now();
@@ -3973,12 +4913,18 @@ function gameLoop() {
           ty: p.turretYaw || 0,
           hp: p.hp,
           sh: p.shield || 0,
+          tsh: p.tempShield || 0,
           st: p.stamina,
           dm: p.damageMultiplier || 1,
           rg: !!p.regenBuff,
           bf: p.buffType || '',
           w: p.weapon,
           alive: p.alive,
+          inv: (p.inventory || []).slice(0, ITEM_SLOT_COUNT),
+          bb: !!(p.boiling && p.boiling.active),
+          pl: !!(p.plane && p.plane.active),
+          ra: !!(p.ram && p.ram.active),
+          rd: !!(p.ram && p.ram.dashing),
           hs: !!p.hasSatellite,
           us: p.usingSatellite,
           sf: p.satelliteFiring,
@@ -3997,7 +4943,21 @@ function gameLoop() {
           sda: neutralDog.shieldDropAt || 0,
           sdx: neutralDog.shieldDropX,
           sdz: neutralDog.shieldDropZ
-        } : { enabled: false }
+        } : { enabled: false },
+        items: itemPickups.map((pickup, index) => ({
+          id: index,
+          tp: pickup.type,
+          x: pickup.x,
+          z: pickup.z,
+          a: !!pickup.active,
+          ro: pickup.rotOffset || 0,
+          bo: pickup.bobOffset || 0
+        })),
+        structures: structures.map((structure) => ({
+          id: structure.id,
+          hp: structure.hp,
+          active: structure.active
+        }))
       };
       broadcast(state);
       lastStateBroadcast = now;
@@ -4026,15 +4986,19 @@ function gameLoop() {
         backward: localInput.b,
         left: localInput.l,
         right: localInput.r,
+        turnAxis: typeof localInput.ax === 'number' ? localInput.ax : 0,
         boost: localInput.boost,
         turretLeft: localInput.tl,
-        turretRight: localInput.tr
+        turretRight: localInput.tr,
+        turretAxis: typeof localInput.ta === 'number' ? localInput.ta : 0
       }, dt);
       updateTurretRotation(localPlayer, { turretLeft: localInput.tl, turretRight: localInput.tr, turretAxis: localInput.ta || 0 }, dt);
 
       const firePressed = !!(isBoundDown('fire') || mobileInput.fire);
       const firePrev = !!((onlineBindings.fire && prevKeys[onlineBindings.fire]) || prevMobileInput.fire);
-      if (localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
+      if (localPlayer.ram && localPlayer.ram.active) {
+        // Dash is host-authoritative; keep movement prediction but avoid firing fake bullets.
+      } else if (localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
         if (firePressed && !firePrev) {
           fireSatelliteLaser(localPlayer, { broadcastEvent: false });
         }
@@ -4043,7 +5007,7 @@ function gameLoop() {
       }
 
       const scopePressed = !!(isBoundJustPressed('scope') || (mobileInput.scopeToggle && !prevMobileInput.scopeToggle));
-      if (scopePressed && !localPlayer.usingSatellite && !localPlayer.satelliteFiring) {
+      if (scopePressed && !localPlayer.usingSatellite && !localPlayer.satelliteFiring && !localPlayer.plane.active && !localPlayer.ram.active) {
         localPlayer.scoping = !localPlayer.scoping;
         scoping = localPlayer.scoping;
       }
@@ -4072,6 +5036,8 @@ function gameLoop() {
       }
     }
 
+    updateItemPickups(dt);
+    updatePlayerEffectVisuals();
     updateBullets(dt, true);
   }
 
@@ -4093,6 +5059,9 @@ function gameLoop() {
   prevMobileInput.mine = mobileInput.mine;
   prevMobileInput.scopeToggle = mobileInput.scopeToggle;
   prevMobileInput.weaponToggle = mobileInput.weaponToggle;
+  prevMobileInput.item0 = mobileInput.item0;
+  prevMobileInput.item1 = mobileInput.item1;
+  prevMobileInput.item2 = mobileInput.item2;
   prevMobileInput.boost = mobileInput.boost;
 
   if (gameStarted) {
@@ -4227,8 +5196,8 @@ function startGame(startData = null) {
   }
   clearGameWorld();
   Object.keys(keys).forEach((key) => { keys[key] = false; prevKeys[key] = false; });
-  mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turretLeft: false, turretRight: false };
-  prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turretLeft: false, turretRight: false };
+  mobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, item0: false, item1: false, item2: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turnAxis: 0, turretLeft: false, turretRight: false, turretAxis: 0, satTapPending: false, satTapX: 0, satTapZ: 0 };
+  prevMobileInput = { forward: false, backward: false, left: false, right: false, fire: false, mine: false, scopeToggle: false, weaponToggle: false, item0: false, item1: false, item2: false, satUp: false, satDown: false, satLeft: false, satRight: false, boost: false, turnAxis: 0, turretLeft: false, turretRight: false, turretAxis: 0, satTapPending: false, satTapX: 0, satTapZ: 0 };
   gameStarted = true;
   gameStartTime = performance.now();
   const playerCount = Math.max(1, Math.min(4, lobbyState.players.length || 1));
@@ -4246,6 +5215,7 @@ function startGame(startData = null) {
     const tank = createTankMesh(p.color);
     scene.add(tank.group);
     p.mesh = tank.group;
+    p.planeShadow = createPlaneShadowMesh(p.color);
     p.turretPivot = tank.turretPivot;
     p.muzzle = tank.muzzle;
     
@@ -4285,10 +5255,12 @@ function startGame(startData = null) {
   if (mapConfig) {
     currentMapConfig = mapConfig;
     spawnRocks(mapConfig.rocks || []);
+    spawnStructures(mapConfig.structures || []);
     spawnHealthPacks(mapConfig.healthPacks || []);
     spawnGrassPatches(mapConfig.grassPatches || []);
   } else {
     spawnRocks();
+    spawnStructures();
     spawnHealthPacks();
     spawnGrassPatches();
   }
@@ -4296,6 +5268,7 @@ function startGame(startData = null) {
   if (enableSatellite) {
     spawnSatellitePickup(mapConfig ? mapConfig.satellitePickup : null);
   }
+  spawnItemPickups(mapConfig && Array.isArray(mapConfig.itemPickups) ? mapConfig.itemPickups : null);
   if (enableNeutralDog) {
     spawnNeutralDog();
   }
@@ -4395,7 +5368,7 @@ window.addEventListener('pagehide', () => {
 
 document.addEventListener('keydown', (e) => {
   keys[e.code] = true;
-  if ([onlineBindings.fire, onlineBindings.scope, onlineBindings.weaponSwitch, onlineBindings.mine].includes(e.code)) {
+  if ([onlineBindings.fire, onlineBindings.scope, onlineBindings.weaponSwitch, onlineBindings.mine].includes(e.code) || (gameStarted && ['Digit1', 'Digit2', 'Digit3'].includes(e.code))) {
     e.preventDefault();
   }
   sendImmediateClientInput();

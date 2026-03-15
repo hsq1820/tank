@@ -475,6 +475,57 @@
             min-height: 18px;
         }
 
+        .inventory-bar {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .inventory-slot {
+            width: 74px;
+            min-height: 54px;
+            border-radius: 12px;
+            border: 1px solid var(--border-soft);
+            background: rgba(255,255,255,0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            color: var(--text-muted);
+            font-size: 11px;
+            text-align: center;
+            padding: 6px;
+        }
+
+        .inventory-slot.active {
+            background: rgba(87, 211, 255, 0.12);
+            border-color: var(--border-strong);
+            color: var(--text-primary);
+        }
+
+        .inventory-key {
+            font-size: 10px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.7);
+        }
+
+        .inventory-icon {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 12px;
+            color: #fff;
+        }
+
+        .inventory-name {
+            line-height: 1.1;
+        }
+
         .announcement-banner {
             position: absolute;
             top: 18px;
@@ -560,6 +611,11 @@
                 <div class="stamina-row"><span>体力</span><span id="p1-stamina-text">100%</span></div>
                 <div class="stamina-bar"><div id="p1-stamina" class="stamina-fill"></div></div>
                 <div id="p1-status" class="status-row">状态：无</div>
+                <div class="inventory-bar">
+                    <div class="inventory-slot" id="p1-slot-0"><div class="inventory-key">1</div><div class="inventory-name">空</div></div>
+                    <div class="inventory-slot" id="p1-slot-1"><div class="inventory-key">2</div><div class="inventory-name">空</div></div>
+                    <div class="inventory-slot" id="p1-slot-2"><div class="inventory-key">3</div><div class="inventory-name">空</div></div>
+                </div>
             </div>
             <div class="p-info right">
                 <div class="p-name p2-color">红色坦克 (P2)</div>
@@ -571,6 +627,11 @@
                 <div class="stamina-row"><span id="p2-stamina-text">100%</span><span>体力</span></div>
                 <div class="stamina-bar"><div id="p2-stamina" class="stamina-fill"></div></div>
                 <div id="p2-status" class="status-row">状态：无</div>
+                <div class="inventory-bar">
+                    <div class="inventory-slot" id="p2-slot-0"><div class="inventory-key">Num1</div><div class="inventory-name">空</div></div>
+                    <div class="inventory-slot" id="p2-slot-1"><div class="inventory-key">Num2</div><div class="inventory-name">空</div></div>
+                    <div class="inventory-slot" id="p2-slot-2"><div class="inventory-key">Num3</div><div class="inventory-name">空</div></div>
+                </div>
             </div>
         </div>
         <div id="poison-timer">毒圈: 150s</div>
@@ -615,7 +676,7 @@
         const MAP_RADIUS = 200;
         const TANK_RADIUS = 1.4;
         const MINE_RADIUS = 0.8;
-        const MINE_DAMAGE = 25;
+        const MINE_DAMAGE = 50;
         const MINE_COOLDOWN = 5000;
         const DOUBLE_TAP_MS = 250;
         const BOOST_DURATION = 500;
@@ -624,8 +685,8 @@
         const COLLISION_DAMAGE_CD = 1000;
         const POISON_DURATION = 150;
         const MAX_RADIUS = MAP_RADIUS;
-        const HEALTH_PACK_HEAL = 100 / 3;
-        const HEALTH_PACK_RESPAWN = 15000;
+        const HEALTH_PACK_HEAL = 30;
+        const HEALTH_PACK_RESPAWN = 20000;
         const MINIMAP_RADIUS = 65;
         const MG_SPREAD_ANGLE = 10 * Math.PI / 180;
         const CANNON_SPREAD_ANGLE = 5 * Math.PI / 180;
@@ -658,6 +719,27 @@
         const DOG_HIT_FLASH_MS = 180;
         const PLAYER_REGEN_BUFF_DELAY = 5000;
         const PLAYER_REGEN_BUFF_RATE = 1;
+        const ITEM_SLOT_COUNT = 3;
+        const ITEM_PICKUP_COUNT = 4;
+        const ITEM_PICKUP_RESPAWN = 12000;
+        const BOILING_BLOOD_DURATION = 10000;
+        const BOILING_BLOOD_DRAIN = 60;
+        const ITEM_SHIELD_VALUE = 30;
+        const ITEM_SHIELD_DURATION = 6000;
+        const RAM_DURATION = 10000;
+        const RAM_SPEED_MULT = 1.8;
+        const RAM_DAMAGE_TAKEN_MULT = 0.7;
+        const RAM_HIT_DAMAGE = 35;
+        const RAM_SELF_DAMAGE = 5;
+        const RAM_DASH_DURATION = 320;
+        const RAM_DASH_SPEED_MULT = 3.5;
+        const RAM_DASH_CD = 800;
+        const PLANE_DURATION = 15000;
+        const PLANE_HEIGHT = 18;
+        const PLANE_BOMB_INTERVAL = 1000;
+        const PLANE_BOMB_DAMAGE = 5;
+        const PLANE_BOMB_RADIUS = 4.2;
+        const PLANE_SHADOW_SCALE = 4.6;
 
         const ACTION_LABELS = {
             forward: '前进',
@@ -698,6 +780,13 @@
             cannon: { name: '加农炮', dmg: 25, cd: 1800, speed: 45, color: 0xffaa00, size: 0.4 }
         };
         const WEAPON_ORDER = ['mg', 'shotgun', 'cannon'];
+        const ITEM_DEFS = {
+            boiling: { id: 'boiling', name: '沸血', shortName: '沸血', glyph: '血', color: '#ef4444' },
+            plane: { id: 'plane', name: '飞机', shortName: '飞机', glyph: '机', color: '#38bdf8' },
+            shield: { id: 'shield', name: '护盾', shortName: '护盾', glyph: '盾', color: '#60a5fa' },
+            ram: { id: 'ram', name: '冲撞', shortName: '冲撞', glyph: '撞', color: '#f97316' }
+        };
+        const ITEM_IDS = Object.keys(ITEM_DEFS);
 
         const textureLoader = new THREE.TextureLoader();
         const DOG_TEXTURES = {
@@ -732,6 +821,696 @@
         const playShotgunSound = createSoundPlayer('/resources/sounds/xiandanqiang.WAV', 4, 0.85);
         const playCannonSound = createSoundPlayer('/resources/sounds/pao.WAV', 4, 0.9);
         const playSatelliteSound = createSoundPlayer('/resources/sounds/weixing.WAV', 3, 0.85);
+
+        function createGlyphTexture(glyph, fill, textColor = '#ffffff', transparentBg = false) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, 128, 128);
+            if (!transparentBg) {
+                ctx.fillStyle = fill;
+                ctx.beginPath();
+                ctx.arc(64, 64, 50, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.fillStyle = textColor;
+            ctx.font = 'bold 58px Microsoft YaHei';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(glyph, 64, 68);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+
+        function createShadowTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(64, 64, 8, 64, 64, 50);
+            grad.addColorStop(0, 'rgba(0,0,0,0.42)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.ellipse(64, 64, 48, 22, 0, 0, Math.PI * 2);
+            ctx.fill();
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+
+        const ITEM_TEXTURES = Object.fromEntries(Object.values(ITEM_DEFS).map(item => [item.id, createGlyphTexture(item.glyph, item.color)]));
+        const PLANE_TEXTURE = createGlyphTexture('✈', '#38bdf8');
+        const SHADOW_TEXTURE = createShadowTexture();
+
+        function getPlayerTotalShield(player) {
+            return (player.shield || 0) + (player.tempShield || 0);
+        }
+
+        function isPlayerAirborne(player) {
+            return !!(player.plane && player.plane.active);
+        }
+
+        function isRamActive(player) {
+            return !!(player.ram && player.ram.active);
+        }
+
+        function getPlayerDamageMultiplier(player, now = Date.now()) {
+            let mult = player.damageMultiplier || 1;
+            if (player.boilingBloodUntil && now < player.boilingBloodUntil) mult *= 2;
+            return mult;
+        }
+
+        function createPlaneVisual() {
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: PLANE_TEXTURE, transparent: true, depthWrite: false }));
+            sprite.scale.set(7, 7, 1);
+            sprite.center.set(0.5, 0.5);
+            sprite.visible = false;
+            scene.add(sprite);
+
+            const shadow = new THREE.Sprite(new THREE.SpriteMaterial({ map: SHADOW_TEXTURE, transparent: true, depthWrite: false }));
+            shadow.scale.set(PLANE_SHADOW_SCALE, PLANE_SHADOW_SCALE * 0.62, 1);
+            shadow.visible = false;
+            scene.add(shadow);
+            return { sprite, shadow };
+        }
+
+        function getInventoryKeyLabel(playerKey, slotIndex) {
+            return playerKey === 'p1' ? String(slotIndex + 1) : `N${slotIndex + 1}`;
+        }
+
+        function getItemIconHtml(itemId) {
+            const def = ITEM_DEFS[itemId];
+            if (!def) return '<div class="inventory-name">空</div>';
+            return `<div class="inventory-icon" style="background:${def.color}">${def.glyph}</div><div class="inventory-name">${def.shortName}</div>`;
+        }
+
+        function renderInventorySlots(playerKey) {
+            const items = players[playerKey].items || [];
+            inventorySlotEls[playerKey].forEach((slotEl, index) => {
+                const itemId = items[index] || null;
+                slotEl.classList.toggle('active', !!itemId);
+                slotEl.innerHTML = `<div class="inventory-key">${getInventoryKeyLabel(playerKey, index)}</div>${itemId ? getItemIconHtml(itemId) : '<div class="inventory-name">空</div>'}`;
+            });
+        }
+
+        function clearRamState(player) {
+            player.ram.active = false;
+            player.ram.until = 0;
+            player.ram.dashUntil = 0;
+            player.ram.lastDashAt = 0;
+            player.ram.hitCooldownUntil = 0;
+        }
+
+        function isTankPositionClear(x, z, ignorePlayerKey = null) {
+            if (Math.hypot(x, z) > MAP_RADIUS - 3) return false;
+            for (const obstacle of obstacles) {
+                const dx = x - obstacle.position.x;
+                const dz = z - obstacle.position.z;
+                if (Math.hypot(dx, dz) < obstacle.userData.collisionRadius + TANK_RADIUS + 0.6) return false;
+            }
+            for (const playerKey of ['p1', 'p2']) {
+                if (playerKey === ignorePlayerKey) continue;
+                const player = players[playerKey];
+                if (!player.mesh || player.hp <= 0) continue;
+                if (Math.hypot(x - player.mesh.position.x, z - player.mesh.position.z) < TANK_RADIUS * 2.2) return false;
+            }
+            return true;
+        }
+
+        function findNearestLandingPosition(x, z, ignorePlayerKey = null) {
+            if (isTankPositionClear(x, z, ignorePlayerKey)) return { x, z };
+            for (let radius = 4; radius <= 40; radius += 4) {
+                for (let step = 0; step < 24; step++) {
+                    const angle = (step / 24) * Math.PI * 2;
+                    const nx = x + Math.cos(angle) * radius;
+                    const nz = z + Math.sin(angle) * radius;
+                    if (isTankPositionClear(nx, nz, ignorePlayerKey)) return { x: nx, z: nz };
+                }
+            }
+            return { x: THREE.MathUtils.clamp(x, -MAP_RADIUS + 3, MAP_RADIUS - 3), z: THREE.MathUtils.clamp(z, -MAP_RADIUS + 3, MAP_RADIUS - 3) };
+        }
+
+        function ensurePlaneVisual(player) {
+            if (!player.planeVisual) player.planeVisual = createPlaneVisual();
+            return player.planeVisual;
+        }
+
+        function addItemToInventory(playerKey, itemId) {
+            const player = players[playerKey];
+            if (!ITEM_DEFS[itemId] || player.items.length >= ITEM_SLOT_COUNT) return false;
+            player.items.push(itemId);
+            updatePlayerHud(playerKey);
+            return true;
+        }
+
+        function removeInventorySlot(playerKey, slotIndex) {
+            const player = players[playerKey];
+            if (slotIndex < 0 || slotIndex >= player.items.length) return null;
+            const [itemId] = player.items.splice(slotIndex, 1);
+            updatePlayerHud(playerKey);
+            return itemId;
+        }
+
+        function createItemPickup(type, position) {
+            const group = new THREE.Group();
+            const base = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.7, 0.9, 0.22, 18),
+                new THREE.MeshStandardMaterial({ color: 0x1d2737, metalness: 0.18, roughness: 0.8 })
+            );
+            base.position.y = 0.12;
+            group.add(base);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: ITEM_TEXTURES[type], transparent: true, depthWrite: false }));
+            sprite.scale.set(2.2, 2.2, 1);
+            sprite.position.y = 2.2;
+            group.add(sprite);
+            group.position.set(position.x, 0, position.z);
+            scene.add(group);
+            return { type, mesh: group, active: true, respawnTime: 0, bobOffset: Math.random() * Math.PI * 2 };
+        }
+
+        function respawnItemPickup(pickup) {
+            const type = ITEM_IDS[Math.floor(Math.random() * ITEM_IDS.length)];
+            const pos = findSafeSpawnPosition({ minFromCenter: 24, minRockDistance: 7, minGrassDistance: 8, minPackDistance: 8 });
+            pickup.type = type;
+            pickup.mesh.children[1].material.map = ITEM_TEXTURES[type];
+            pickup.mesh.children[1].material.needsUpdate = true;
+            pickup.mesh.position.set(pos.x, 0, pos.z);
+            pickup.mesh.visible = true;
+            pickup.active = true;
+            pickup.respawnTime = 0;
+            pickup.bobOffset = Math.random() * Math.PI * 2;
+        }
+
+        function spawnItemPickups() {
+            for (const pickup of itemPickups) {
+                if (pickup.mesh) scene.remove(pickup.mesh);
+            }
+            itemPickups.length = 0;
+            for (let i = 0; i < ITEM_PICKUP_COUNT; i++) {
+                const type = ITEM_IDS[Math.floor(Math.random() * ITEM_IDS.length)];
+                const pos = findSafeSpawnPosition({ minFromCenter: 24, minRockDistance: 7, minGrassDistance: 8, minPackDistance: 8 });
+                itemPickups.push(createItemPickup(type, pos));
+            }
+        }
+
+        function updateItemPickups(now, deltaSeconds) {
+            for (const pickup of itemPickups) {
+                if (!pickup.active) {
+                    if (pickup.respawnTime && now >= pickup.respawnTime) respawnItemPickup(pickup);
+                    continue;
+                }
+                pickup.mesh.position.y = Math.sin(now * 0.003 + pickup.bobOffset) * 0.15;
+                pickup.mesh.rotation.y += deltaSeconds * 1.2;
+                for (const playerKey of ['p1', 'p2']) {
+                    const player = players[playerKey];
+                    if (isPlayerAirborne(player) || player.hp <= 0 || player.items.length >= ITEM_SLOT_COUNT) continue;
+                    const dx = player.mesh.position.x - pickup.mesh.position.x;
+                    const dz = player.mesh.position.z - pickup.mesh.position.z;
+                    if (Math.hypot(dx, dz) < 3.2) {
+                        if (addItemToInventory(playerKey, pickup.type)) {
+                            pickup.active = false;
+                            pickup.mesh.visible = false;
+                            pickup.respawnTime = now + ITEM_PICKUP_RESPAWN;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        function activateBoilingBlood(playerKey) {
+            const player = players[playerKey];
+            player.boilingBloodUntil = Date.now() + BOILING_BLOOD_DURATION;
+            updatePlayerHud(playerKey);
+        }
+
+        function activateTemporaryShield(playerKey) {
+            const player = players[playerKey];
+            player.tempShield = ITEM_SHIELD_VALUE;
+            player.tempShieldUntil = Date.now() + ITEM_SHIELD_DURATION;
+            updatePlayerHud(playerKey);
+        }
+
+        function activateRam(playerKey) {
+            const player = players[playerKey];
+            player.ram.active = true;
+            player.ram.until = Date.now() + RAM_DURATION;
+            player.ram.dashUntil = 0;
+            player.ram.lastDashAt = 0;
+            player.ram.hitCooldownUntil = 0;
+            updatePlayerHud(playerKey);
+        }
+
+        function activatePlane(playerKey) {
+            const player = players[playerKey];
+            player.plane.active = true;
+            player.plane.until = Date.now() + PLANE_DURATION;
+            player.plane.lastBombAt = 0;
+            player.mesh.visible = false;
+            const visual = ensurePlaneVisual(player);
+            visual.sprite.visible = true;
+            visual.shadow.visible = true;
+            updatePlayerHud(playerKey);
+        }
+
+        function landPlayerFromPlane(playerKey) {
+            const player = players[playerKey];
+            if (!player.plane.active) return;
+            const pos = findNearestLandingPosition(player.mesh.position.x, player.mesh.position.z, playerKey);
+            player.mesh.position.set(pos.x, 0, pos.z);
+            player.mesh.visible = true;
+            const visual = ensurePlaneVisual(player);
+            visual.sprite.visible = false;
+            visual.shadow.visible = false;
+            player.plane.active = false;
+            player.plane.until = 0;
+            player.plane.lastBombAt = 0;
+            updatePlayerHud(playerKey);
+        }
+
+        function triggerRamDash(playerKey) {
+            const player = players[playerKey];
+            const now = Date.now();
+            if (!player.ram.active || now - player.ram.lastDashAt < RAM_DASH_CD) return;
+            player.ram.lastDashAt = now;
+            player.ram.dashUntil = now + RAM_DASH_DURATION;
+        }
+
+        function tryUseInventorySlot(playerKey, slotIndex) {
+            const player = players[playerKey];
+            const itemId = player.items[slotIndex];
+            if (!itemId) return false;
+            removeInventorySlot(playerKey, slotIndex);
+            if (itemId === 'boiling') activateBoilingBlood(playerKey);
+            if (itemId === 'shield') activateTemporaryShield(playerKey);
+            if (itemId === 'ram') activateRam(playerKey);
+            if (itemId === 'plane') activatePlane(playerKey);
+            return true;
+        }
+
+        function getRequestedItemSlotFromCode(code) {
+            if (code === 'Digit1') return { playerKey: 'p1', slot: 0 };
+            if (code === 'Digit2') return { playerKey: 'p1', slot: 1 };
+            if (code === 'Digit3') return { playerKey: 'p1', slot: 2 };
+            if (code === 'Numpad1') return { playerKey: 'p2', slot: 0 };
+            if (code === 'Numpad2') return { playerKey: 'p2', slot: 1 };
+            if (code === 'Numpad3') return { playerKey: 'p2', slot: 2 };
+            return null;
+        }
+
+        function updatePlayerEffectVisuals(playerKey) {
+            const player = players[playerKey];
+            if (isPlayerAirborne(player)) {
+                const visual = ensurePlaneVisual(player);
+                visual.sprite.visible = true;
+                visual.shadow.visible = true;
+                visual.sprite.position.set(player.mesh.position.x, PLANE_HEIGHT, player.mesh.position.z);
+                visual.shadow.position.set(player.mesh.position.x, 0.15, player.mesh.position.z);
+            } else if (player.planeVisual) {
+                player.planeVisual.sprite.visible = false;
+                player.planeVisual.shadow.visible = false;
+            }
+        }
+
+        function updatePlayerItemEffects(now, deltaSeconds) {
+            const boilingDrainPerSecond = BOILING_BLOOD_DRAIN / (BOILING_BLOOD_DURATION / 1000);
+            for (const playerKey of ['p1', 'p2']) {
+                const player = players[playerKey];
+
+                if (player.boilingBloodUntil && now < player.boilingBloodUntil) {
+                    player.hp = Math.max(0, player.hp - boilingDrainPerSecond * deltaSeconds);
+                    if (player.hp <= 0 && gameStarted) {
+                        applyDamage(playerKey, 0.001, 'boiling');
+                    } else {
+                        updatePlayerHud(playerKey);
+                    }
+                } else if (player.boilingBloodUntil) {
+                    player.boilingBloodUntil = 0;
+                    updatePlayerHud(playerKey);
+                }
+
+                if (player.tempShieldUntil && now >= player.tempShieldUntil) {
+                    player.tempShield = 0;
+                    player.tempShieldUntil = 0;
+                    updatePlayerHud(playerKey);
+                }
+
+                if (player.ram.active && now >= player.ram.until) {
+                    clearRamState(player);
+                    updatePlayerHud(playerKey);
+                }
+
+                if (player.plane.active) {
+                    if (now >= player.plane.until) {
+                        landPlayerFromPlane(playerKey);
+                    } else if (!player.plane.lastBombAt || now - player.plane.lastBombAt >= PLANE_BOMB_INTERVAL) {
+                        player.plane.lastBombAt = now;
+                        for (const targetKey of ['p1', 'p2']) {
+                            if (targetKey === playerKey) continue;
+                            const target = players[targetKey];
+                            if (target.hp <= 0) continue;
+                            if (Math.hypot(target.mesh.position.x - player.mesh.position.x, target.mesh.position.z - player.mesh.position.z) <= PLANE_BOMB_RADIUS) {
+                                applyDamage(targetKey, PLANE_BOMB_DAMAGE, 'bomb');
+                            }
+                        }
+                        if (neutralDogEnabled && neutralDog && neutralDog.alive && Math.hypot(neutralDog.group.position.x - player.mesh.position.x, neutralDog.group.position.z - player.mesh.position.z) <= PLANE_BOMB_RADIUS) {
+                            damageNeutralDog(PLANE_BOMB_DAMAGE, playerKey);
+                        }
+                    }
+                }
+
+                updatePlayerEffectVisuals(playerKey);
+            }
+        }
+
+        function tryApplyRamImpact(attackerKey, defenderKey) {
+            const attacker = players[attackerKey];
+            const defender = players[defenderKey];
+            const now = Date.now();
+            if (!attacker.ram.active || now > attacker.ram.dashUntil || now < attacker.ram.hitCooldownUntil) return;
+            if (defender.hp <= 0 || isPlayerAirborne(defender)) return;
+            const dx = defender.mesh.position.x - attacker.mesh.position.x;
+            const dz = defender.mesh.position.z - attacker.mesh.position.z;
+            const dist = Math.hypot(dx, dz);
+            if (dist > TANK_RADIUS * 2.2) return;
+            attacker.ram.hitCooldownUntil = now + 350;
+            applyDamage(defenderKey, RAM_HIT_DAMAGE, 'ram');
+            applyDamage(attackerKey, RAM_SELF_DAMAGE, 'ramSelf');
+            const push = 6;
+            if (dist > 0.001) {
+                defender.mesh.position.x += (dx / dist) * push;
+                defender.mesh.position.z += (dz / dist) * push;
+                keepTankInBounds(defender);
+            }
+        }
+
+        function getInventoryKeyLabel(playerKey, slotIndex) {
+            return playerKey === 'p1' ? String(slotIndex + 1) : `N${slotIndex + 1}`;
+        }
+
+        function getItemIconHtml(itemId) {
+            const def = ITEM_DEFS[itemId];
+            if (!def) return '<div class="inventory-name">空</div>';
+            return `<div class="inventory-icon" style="background:${def.color}">${def.glyph}</div><div class="inventory-name">${def.shortName}</div>`;
+        }
+
+        function renderInventorySlots(playerKey) {
+            const items = players[playerKey].items || [];
+            inventorySlotEls[playerKey].forEach((slotEl, index) => {
+                const itemId = items[index] || null;
+                slotEl.classList.toggle('active', !!itemId);
+                slotEl.innerHTML = `<div class="inventory-key">${getInventoryKeyLabel(playerKey, index)}</div>${itemId ? getItemIconHtml(itemId) : '<div class="inventory-name">空</div>'}`;
+            });
+        }
+
+        function addItemToInventory(playerKey, itemId) {
+            const player = players[playerKey];
+            if (!ITEM_DEFS[itemId] || player.items.length >= ITEM_SLOT_COUNT) return false;
+            player.items.push(itemId);
+            updatePlayerHud(playerKey);
+            return true;
+        }
+
+        function removeInventorySlot(playerKey, slotIndex) {
+            const player = players[playerKey];
+            if (slotIndex < 0 || slotIndex >= player.items.length) return null;
+            const [itemId] = player.items.splice(slotIndex, 1);
+            updatePlayerHud(playerKey);
+            return itemId;
+        }
+
+        function createItemPickup(type, position) {
+            const group = new THREE.Group();
+            const base = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.7, 0.9, 0.22, 18),
+                new THREE.MeshStandardMaterial({ color: 0x1d2737, metalness: 0.18, roughness: 0.8 })
+            );
+            base.position.y = 0.12;
+            group.add(base);
+
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: ITEM_TEXTURES[type], transparent: true, depthWrite: false }));
+            sprite.scale.set(2.2, 2.2, 1);
+            sprite.position.y = 2.2;
+            group.add(sprite);
+
+            group.position.set(position.x, 0, position.z);
+            scene.add(group);
+            return { type, mesh: group, active: true, respawnTime: 0, bobOffset: Math.random() * Math.PI * 2 };
+        }
+
+        function respawnItemPickup(pickup) {
+            const type = ITEM_IDS[Math.floor(Math.random() * ITEM_IDS.length)];
+            const pos = findSafeSpawnPosition({ minFromCenter: 24, minRockDistance: 7, minGrassDistance: 8, minPackDistance: 8 });
+            pickup.type = type;
+            pickup.mesh.children[1].material.map = ITEM_TEXTURES[type];
+            pickup.mesh.children[1].material.needsUpdate = true;
+            pickup.mesh.position.set(pos.x, 0, pos.z);
+            pickup.mesh.visible = true;
+            pickup.active = true;
+            pickup.respawnTime = 0;
+            pickup.bobOffset = Math.random() * Math.PI * 2;
+        }
+
+        function spawnItemPickups() {
+            itemPickups.length = 0;
+            for (let i = 0; i < ITEM_PICKUP_COUNT; i++) {
+                const type = ITEM_IDS[Math.floor(Math.random() * ITEM_IDS.length)];
+                const pos = findSafeSpawnPosition({ minFromCenter: 24, minRockDistance: 7, minGrassDistance: 8, minPackDistance: 8 });
+                itemPickups.push(createItemPickup(type, pos));
+            }
+        }
+
+        function updateItemPickups(now, deltaSeconds) {
+            for (const pickup of itemPickups) {
+                if (!pickup.active) {
+                    if (pickup.respawnTime && now >= pickup.respawnTime) {
+                        respawnItemPickup(pickup);
+                    }
+                    continue;
+                }
+
+                pickup.mesh.position.y = Math.sin(now * 0.003 + pickup.bobOffset) * 0.15;
+                pickup.mesh.rotation.y += deltaSeconds * 1.2;
+
+                for (const playerKey of ['p1', 'p2']) {
+                    const player = players[playerKey];
+                    if (isPlayerAirborne(player) || player.hp <= 0 || player.items.length >= ITEM_SLOT_COUNT) continue;
+                    const dx = player.mesh.position.x - pickup.mesh.position.x;
+                    const dz = player.mesh.position.z - pickup.mesh.position.z;
+                    if (Math.hypot(dx, dz) < 3.2) {
+                        if (addItemToInventory(playerKey, pickup.type)) {
+                            pickup.active = false;
+                            pickup.mesh.visible = false;
+                            pickup.respawnTime = now + ITEM_PICKUP_RESPAWN;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        function getRequestedItemSlotFromCode(code) {
+            if (code === 'Digit1') return { playerKey: 'p1', slot: 0 };
+            if (code === 'Digit2') return { playerKey: 'p1', slot: 1 };
+            if (code === 'Digit3') return { playerKey: 'p1', slot: 2 };
+            if (code === 'Numpad1') return { playerKey: 'p2', slot: 0 };
+            if (code === 'Numpad2') return { playerKey: 'p2', slot: 1 };
+            if (code === 'Numpad3') return { playerKey: 'p2', slot: 2 };
+            return null;
+        }
+
+        function clearRamState(player) {
+            player.ram.active = false;
+            player.ram.endsAt = 0;
+            player.ram.dashing = false;
+            player.ram.dashEndsAt = 0;
+            player.ram.lastHitAt = 0;
+        }
+
+        function isTankPositionClear(x, z, ignorePlayerKey = null) {
+            if (Math.hypot(x, z) > MAP_RADIUS - 3) return false;
+            for (const obstacle of obstacles) {
+                const dx = x - obstacle.position.x;
+                const dz = z - obstacle.position.z;
+                if (Math.hypot(dx, dz) < obstacle.userData.collisionRadius + TANK_RADIUS + 0.6) return false;
+            }
+            for (const playerKey of ['p1', 'p2']) {
+                if (playerKey === ignorePlayerKey) continue;
+                const player = players[playerKey];
+                if (!player.mesh || player.hp <= 0) continue;
+                if (Math.hypot(x - player.mesh.position.x, z - player.mesh.position.z) < TANK_RADIUS * 2.5) return false;
+            }
+            return true;
+        }
+
+        function findNearestLandingPosition(x, z, ignorePlayerKey = null) {
+            if (isTankPositionClear(x, z, ignorePlayerKey)) return { x, z };
+            for (let radius = 4; radius <= 40; radius += 4) {
+                for (let step = 0; step < 20; step++) {
+                    const angle = (step / 20) * Math.PI * 2;
+                    const nx = x + Math.cos(angle) * radius;
+                    const nz = z + Math.sin(angle) * radius;
+                    if (isTankPositionClear(nx, nz, ignorePlayerKey)) return { x: nx, z: nz };
+                }
+            }
+            return { x: THREE.MathUtils.clamp(x, -MAP_RADIUS + 3, MAP_RADIUS - 3), z: THREE.MathUtils.clamp(z, -MAP_RADIUS + 3, MAP_RADIUS - 3) };
+        }
+
+        function ensurePlaneVisual(player) {
+            if (!player.planeVisual) player.planeVisual = createPlaneVisual();
+            return player.planeVisual;
+        }
+
+        function landPlayerFromPlane(playerKey) {
+            const player = players[playerKey];
+            if (!player.plane.active) return;
+            const pos = findNearestLandingPosition(player.mesh.position.x, player.mesh.position.z, playerKey);
+            player.mesh.position.set(pos.x, 0, pos.z);
+            player.mesh.visible = true;
+            const visual = ensurePlaneVisual(player);
+            visual.sprite.visible = false;
+            visual.shadow.visible = false;
+            player.plane.active = false;
+            player.plane.endsAt = 0;
+            player.plane.lastBombAt = 0;
+        }
+
+        function activateBoilingBlood(playerKey) {
+            const player = players[playerKey];
+            player.boilingBloodUntil = Date.now() + BOILING_BLOOD_DURATION;
+            player.boilingBloodDrainTick = 0;
+            updatePlayerHud(playerKey);
+        }
+
+        function activateTemporaryShield(playerKey) {
+            const player = players[playerKey];
+            player.tempShield = ITEM_SHIELD_VALUE;
+            player.tempShieldUntil = Date.now() + ITEM_SHIELD_DURATION;
+            updatePlayerHud(playerKey);
+        }
+
+        function activateRam(playerKey) {
+            const player = players[playerKey];
+            if (player.usingSatellite || player.satelliteFiring || player.plane.active) return false;
+            player.ram.active = true;
+            player.ram.endsAt = Date.now() + RAM_DURATION;
+            player.ram.dashing = false;
+            player.ram.dashEndsAt = 0;
+            player.ram.lastDashAt = 0;
+            updatePlayerHud(playerKey);
+            return true;
+        }
+
+        function activatePlane(playerKey) {
+            const player = players[playerKey];
+            if (player.usingSatellite || player.satelliteFiring || player.plane.active) return false;
+            clearRamState(player);
+            player.scoping = false;
+            player.plane.active = true;
+            player.plane.endsAt = Date.now() + PLANE_DURATION;
+            player.plane.lastBombAt = 0;
+            player.mesh.visible = false;
+            const visual = ensurePlaneVisual(player);
+            visual.sprite.visible = true;
+            visual.shadow.visible = true;
+            updatePlayerHud(playerKey);
+            return true;
+        }
+
+        function triggerRamDash(playerKey) {
+            const player = players[playerKey];
+            const now = Date.now();
+            if (!player.ram.active || now - player.ram.lastDashAt < RAM_DASH_CD) return;
+            player.ram.lastDashAt = now;
+            player.ram.dashing = true;
+            player.ram.dashEndsAt = now + RAM_DASH_DURATION;
+        }
+
+        function tryUseInventorySlot(playerKey, slotIndex) {
+            const player = players[playerKey];
+            const itemId = player.items[slotIndex];
+            if (!itemId) return false;
+            let used = false;
+            if (itemId === 'boiling') { activateBoilingBlood(playerKey); used = true; }
+            if (itemId === 'shield') { activateTemporaryShield(playerKey); used = true; }
+            if (itemId === 'ram') used = activateRam(playerKey);
+            if (itemId === 'plane') used = activatePlane(playerKey);
+            if (!used) return false;
+            removeInventorySlot(playerKey, slotIndex);
+            return true;
+        }
+
+        function updatePlayerEffectVisuals(playerKey) {
+            const player = players[playerKey];
+            if (isPlayerAirborne(player)) {
+                const visual = ensurePlaneVisual(player);
+                visual.sprite.visible = true;
+                visual.shadow.visible = true;
+                visual.sprite.position.set(player.mesh.position.x, PLANE_HEIGHT, player.mesh.position.z);
+                visual.shadow.position.set(player.mesh.position.x, 0.15, player.mesh.position.z);
+            } else if (player.planeVisual) {
+                player.planeVisual.sprite.visible = false;
+                player.planeVisual.shadow.visible = false;
+            }
+        }
+
+        function updatePlayerItemEffects(now, deltaSeconds) {
+            for (const playerKey of ['p1', 'p2']) {
+                const player = players[playerKey];
+
+                if (player.boilingBloodUntil && now < player.boilingBloodUntil) {
+                    const drain = (BOILING_BLOOD_DRAIN / (BOILING_BLOOD_DURATION / 1000)) * deltaSeconds;
+                    player.hp = Math.max(0, player.hp - drain);
+                    if (player.hp <= 0) {
+                        applyDamage(playerKey, 0.001);
+                    } else {
+                        updatePlayerHud(playerKey);
+                    }
+                } else if (player.boilingBloodUntil) {
+                    player.boilingBloodUntil = 0;
+                    updatePlayerHud(playerKey);
+                }
+
+                if (player.tempShieldUntil && now >= player.tempShieldUntil) {
+                    player.tempShield = 0;
+                    player.tempShieldUntil = 0;
+                    updatePlayerHud(playerKey);
+                }
+
+                if (player.ram.active && now >= player.ram.endsAt) {
+                    clearRamState(player);
+                    updatePlayerHud(playerKey);
+                }
+                if (player.ram.dashing && now >= player.ram.dashEndsAt) {
+                    player.ram.dashing = false;
+                }
+
+                if (player.plane.active) {
+                    if (now >= player.plane.endsAt) {
+                        landPlayerFromPlane(playerKey);
+                        updatePlayerHud(playerKey);
+                    } else if (!player.plane.lastBombAt || now - player.plane.lastBombAt >= PLANE_BOMB_INTERVAL) {
+                        player.plane.lastBombAt = now;
+                        for (const targetKey of ['p1', 'p2']) {
+                            if (targetKey === playerKey) continue;
+                            const target = players[targetKey];
+                            if (target.hp <= 0) continue;
+                            if (Math.hypot(target.mesh.position.x - player.mesh.position.x, target.mesh.position.z - player.mesh.position.z) <= PLANE_BOMB_RADIUS) {
+                                applyDamage(targetKey, PLANE_BOMB_DAMAGE);
+                            }
+                        }
+                        if (neutralDogEnabled && neutralDog && neutralDog.alive && Math.hypot(neutralDog.group.position.x - player.mesh.position.x, neutralDog.group.position.z - player.mesh.position.z) <= PLANE_BOMB_RADIUS) {
+                            damageNeutralDog(PLANE_BOMB_DAMAGE, playerKey);
+                        }
+                    }
+                }
+
+                updatePlayerEffectVisuals(playerKey);
+            }
+        }
 
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0xd9f1ff);
@@ -768,6 +1547,10 @@
             p1: document.getElementById('p1-stamina-text'),
             p2: document.getElementById('p2-stamina-text')
         };
+        const inventorySlotEls = {
+            p1: [0, 1, 2].map(i => document.getElementById(`p1-slot-${i}`)),
+            p2: [0, 1, 2].map(i => document.getElementById(`p2-slot-${i}`))
+        };
         const poisonTimerEl = document.getElementById('poison-timer');
 
         const keys = {};
@@ -775,7 +1558,9 @@
         const bullets = [];
         const mines = [];
         const obstacles = [];
+        const houses = [];
         const healthPacks = [];
+        const itemPickups = [];
         const grassPatches = [];
         let gameStarted = false;
         let collisionDamageEnabled = true;
@@ -819,6 +1604,14 @@
                 regenBuff: false,
                 buffType: '',
                 lastDamagedAt: Date.now(),
+                items: [],
+                tempShield: 0,
+                tempShieldUntil: 0,
+                boilingBloodUntil: 0,
+                boilingBloodDrainTick: 0,
+                ram: { active: false, until: 0, dashUntil: 0, lastDashAt: 0, hitCooldownUntil: 0 },
+                plane: { active: false, until: 0, lastBombAt: 0 },
+                planeVisual: null,
                 lastTapKey: '',
                 lastTapTime: 0,
                 lastShot: 0,
@@ -1189,6 +1982,59 @@
             }
         }
 
+        function createHouse() {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(
+                new THREE.BoxGeometry(8, 5.2, 8),
+                new THREE.MeshStandardMaterial({ color: 0x9b7a58, roughness: 0.86 })
+            );
+            body.position.y = 2.6;
+            body.castShadow = true;
+            body.receiveShadow = true;
+            group.add(body);
+
+            const roof = new THREE.Mesh(
+                new THREE.ConeGeometry(6.4, 3.2, 4),
+                new THREE.MeshStandardMaterial({ color: 0x6e3d2b, roughness: 0.8 })
+            );
+            roof.rotation.y = Math.PI / 4;
+            roof.position.y = 6.1;
+            roof.castShadow = true;
+            roof.receiveShadow = true;
+            group.add(roof);
+
+            group.userData.collisionRadius = 5.2;
+            group.userData.destructible = true;
+            group.userData.hp = 1000;
+            scene.add(group);
+            return group;
+        }
+
+        function resetHouses() {
+            for (const house of houses) {
+                scene.remove(house);
+                const idx = obstacles.indexOf(house);
+                if (idx >= 0) obstacles.splice(idx, 1);
+            }
+            houses.length = 0;
+        }
+
+        function spawnHouses() {
+            resetHouses();
+            let created = 0;
+            let attempts = 0;
+            while (created < 4 && attempts < 200) {
+                attempts++;
+                const pos = randomGroundPosition(30);
+                if (isTooCloseToExistingRock(pos.x, pos.z, 10)) continue;
+                const house = createHouse();
+                house.position.set(pos.x, 0, pos.z);
+                houses.push(house);
+                obstacles.push(house);
+                created++;
+            }
+        }
+
         function randomGroundPosition(minFromCenter = 0) {
             for (let i = 0; i < 400; i++) {
                 const x = (Math.random() - 0.5) * MAP_HALF * 2;
@@ -1529,17 +2375,21 @@
             hpFillEls[playerKey].style.width = `${Math.max(0, player.hp)}%`;
             hpFillEls[playerKey].style.background = getHpFillColor(player.hp);
             hpTextEls[playerKey].textContent = `HP ${Math.ceil(player.hp)}`;
-            weaponTextEls[playerKey].textContent = `武器：${WEAPONS[player.weapon].name}`;
+            weaponTextEls[playerKey].textContent = `武器：${isRamActive(player) ? '冲撞' : WEAPONS[player.weapon].name}`;
             staminaFillEls[playerKey].style.width = `${Math.max(0, player.stamina)}%`;
             staminaTextEls[playerKey].textContent = `${Math.round(Math.max(0, player.stamina))}%`;
             const statusEl = document.getElementById(`${playerKey}-status`);
             if (statusEl) {
                 const statusParts = [];
-                if (player.shield > 0) statusParts.push(`护盾 ${Math.round(player.shield)}`);
-                if (player.damageMultiplier > 1) statusParts.push('攻击 x2');
+                if (getPlayerTotalShield(player) > 0) statusParts.push(`护盾 ${Math.round(getPlayerTotalShield(player))}`);
+                if (getPlayerDamageMultiplier(player) > 1) statusParts.push(`攻击 x${getPlayerDamageMultiplier(player)}`);
                 if (player.regenBuff) statusParts.push('再生');
+                if (player.boilingBloodUntil) statusParts.push('沸血');
+                if (isRamActive(player)) statusParts.push('冲撞');
+                if (isPlayerAirborne(player)) statusParts.push('飞机');
                 statusEl.textContent = statusParts.length ? statusParts.join(' · ') : '状态：无';
             }
+            renderInventorySlots(playerKey);
             updateTankHpBar(playerKey);
         }
 
@@ -1569,9 +2419,16 @@
             updatePlayerHud(playerKey);
         }
 
-        function applyDamage(playerKey, dmg) {
+        function applyDamage(playerKey, dmg, source = 'generic') {
             const player = players[playerKey];
+            if (isPlayerAirborne(player) && source !== 'satellite') return;
             player.lastDamagedAt = Date.now();
+            if (isRamActive(player)) dmg *= RAM_DAMAGE_TAKEN_MULT;
+            if (player.tempShield > 0) {
+                const absorbed = Math.min(player.tempShield, dmg);
+                player.tempShield -= absorbed;
+                dmg -= absorbed;
+            }
             if (player.shield > 0) {
                 const absorbed = Math.min(player.shield, dmg);
                 player.shield -= absorbed;
@@ -1582,6 +2439,9 @@
             player.shake = 0.25;
             updatePlayerHud(playerKey);
                 if (player.hp <= 0) {
+                    if (isPlayerAirborne(player)) {
+                        landPlayerFromPlane(playerKey);
+                    }
                     playTankDiedSound();
                     gameStarted = false;
                 document.getElementById('win-text').innerText = (playerKey === 'p1' ? '蓝色坦克' : '红色坦克') + ' 被摧毁！';
@@ -1598,6 +2458,11 @@
 
         function fire(playerKey) {
             const player = players[playerKey];
+            if (isPlayerAirborne(player)) return;
+            if (isRamActive(player)) {
+                triggerRamDash(playerKey);
+                return;
+            }
             const cfg = WEAPONS[player.weapon];
             const now = Date.now();
             if (now - player.lastShot < cfg.cd) return;
@@ -1633,7 +2498,7 @@
                     mesh: bulletMesh,
                     dir,
                     speed: cfg.speed,
-                    dmg: cfg.dmg * (player.damageMultiplier || 1),
+                    dmg: cfg.dmg * getPlayerDamageMultiplier(player, now),
                     owner: playerKey,
                     radius: cfg.size,
                     life: 0,
@@ -1655,6 +2520,16 @@
                 const dz = bulletPos.z - obstacle.position.z;
                 const distXZ = Math.hypot(dx, dz);
                 if (distXZ < obstacle.userData.collisionRadius + bullet.radius) {
+                    if (obstacle.userData.destructible) {
+                        obstacle.userData.hp -= bullet.dmg || 0;
+                        if (obstacle.userData.hp <= 0) {
+                            scene.remove(obstacle);
+                            const obstacleIdx = obstacles.indexOf(obstacle);
+                            if (obstacleIdx >= 0) obstacles.splice(obstacleIdx, 1);
+                            const houseIdx = houses.indexOf(obstacle);
+                            if (houseIdx >= 0) houses.splice(houseIdx, 1);
+                        }
+                    }
                     disposeBullet(bullet);
                     bullets.splice(index, 1);
                     return true;
@@ -1700,6 +2575,10 @@
 
             const now = Date.now();
             if (gameStarted) {
+                const requestedSlot = getRequestedItemSlotFromCode(event.code);
+                if (requestedSlot) {
+                    tryUseInventorySlot(requestedSlot.playerKey, requestedSlot.slot);
+                }
                 for (const playerKey of ['p1', 'p2']) {
                     const player = players[playerKey];
                     const bindings = keyBindings[playerKey];
@@ -1865,7 +2744,7 @@
                 const dx = target.mesh.position.x - player.satelliteTarget.x;
                 const dz = target.mesh.position.z - player.satelliteTarget.z;
                 if (Math.hypot(dx, dz) <= SATELLITE_RADIUS) {
-                    applyDamage(targetKey, SATELLITE_DAMAGE * (player.damageMultiplier || 1));
+                    applyDamage(targetKey, SATELLITE_DAMAGE * getPlayerDamageMultiplier(player), 'satellite');
                 }
             }
 
@@ -2225,21 +3104,26 @@
             }
             const scopeMult = player.scoping ? SCOPE_SPEED_MULT : 1;
             const boostMult = player.boosting ? BOOST_MULTIPLIER : 1;
+            const ramMult = isRamActive(player) ? RAM_SPEED_MULT : 1;
             // 瞄准镜时移动速度为1/3；双击加速时恢复原速
-            const effectiveSpeedMult = player.boosting ? boostMult : scopeMult * boostMult;
+            const effectiveSpeedMult = (player.boosting ? boostMult : scopeMult * boostMult) * ramMult;
             const moveSpeed = player.speed * effectiveSpeedMult * deltaSeconds;
             const backSpeed = moveSpeed * 0.75;
-            const turnSpeed = 1.95 * (player.scoping ? 0.22 : 1) * deltaSeconds;
+            const turnSpeed = 1.6 * (player.scoping ? 0.22 : 1) * deltaSeconds;
             const reversing = !!keys[controls.backward] && !keys[controls.forward];
 
-            if (keys[controls.forward]) player.mesh.translateZ(-moveSpeed);
-            if (keys[controls.backward]) player.mesh.translateZ(backSpeed);
+            if (player.ram && player.ram.dashUntil > Date.now()) {
+                player.mesh.translateZ(-moveSpeed * RAM_DASH_SPEED_MULT);
+            } else {
+                if (keys[controls.forward]) player.mesh.translateZ(-moveSpeed);
+                if (keys[controls.backward]) player.mesh.translateZ(backSpeed);
+            }
             if (keys[controls.left]) player.mesh.rotation.y += (reversing ? -1 : 1) * turnSpeed;
             if (keys[controls.right]) player.mesh.rotation.y -= (reversing ? -1 : 1) * turnSpeed;
             if (keys[fireKey]) fire(playerKey);
 
             keepTankInBounds(player);
-            resolveRockCollisions(playerKey);
+            if (!isPlayerAirborne(player)) resolveRockCollisions(playerKey);
             updatePlayerHud(playerKey);
 
         }
@@ -2592,6 +3476,22 @@
             neutralDogEnabled = document.getElementById('neutral-dog').classList.contains('active');
             clearNeutralDog();
 
+            for (const pack of healthPacks) scene.remove(pack.mesh);
+            healthPacks.length = 0;
+            for (const patch of grassPatches) scene.remove(patch.mesh);
+            grassPatches.length = 0;
+            for (const pickup of itemPickups) if (pickup.mesh) scene.remove(pickup.mesh);
+            itemPickups.length = 0;
+            if (satellitePickup && satellitePickup.mesh) scene.remove(satellitePickup.mesh);
+            satellitePickup = null;
+            if (poisonCircle) {
+                scene.remove(poisonCircle);
+                poisonCircle.geometry.dispose();
+                poisonCircle.material.dispose();
+                poisonCircle = null;
+            }
+            resetHouses();
+
             const p1Tank = createTank(players.p1.color);
             players.p1.mesh = p1Tank.group;
             players.p1.muzzle = p1Tank.muzzle;
@@ -2604,9 +3504,17 @@
             players.p1.satelliteFiring = false;
             players.p1.satelliteBeam = null;
             players.p1.shield = 0;
+            players.p1.tempShield = 0;
+            players.p1.tempShieldUntil = 0;
             players.p1.damageMultiplier = 1;
             players.p1.regenBuff = false;
             players.p1.buffType = '';
+            players.p1.boilingBloodUntil = 0;
+            players.p1.items = [];
+            clearRamState(players.p1);
+            players.p1.plane.active = false;
+            players.p1.plane.until = 0;
+            players.p1.plane.lastBombAt = 0;
             players.p1.lastDamagedAt = Date.now();
             players.p1.satelliteTarget.x = 0;
             players.p1.satelliteTarget.z = 0;
@@ -2624,9 +3532,17 @@
             players.p2.satelliteFiring = false;
             players.p2.satelliteBeam = null;
             players.p2.shield = 0;
+            players.p2.tempShield = 0;
+            players.p2.tempShieldUntil = 0;
             players.p2.damageMultiplier = 1;
             players.p2.regenBuff = false;
             players.p2.buffType = '';
+            players.p2.boilingBloodUntil = 0;
+            players.p2.items = [];
+            clearRamState(players.p2);
+            players.p2.plane.active = false;
+            players.p2.plane.until = 0;
+            players.p2.plane.lastBombAt = 0;
             players.p2.lastDamagedAt = Date.now();
             players.p2.satelliteTarget.x = 0;
             players.p2.satelliteTarget.z = 0;
@@ -2640,6 +3556,8 @@
 
             spawnGrassPatches();
             spawnHealthPacks();
+            spawnItemPickups();
+            spawnHouses();
             if (satelliteLaserEnabled) spawnSatellitePickup();
             if (neutralDogEnabled) spawnNeutralDog();
 
@@ -2708,12 +3626,16 @@
             if (isKeyJustPressed(keyBindings.p2.mine)) tryPlaceMine('p2');
             updateGrassStealth();
             updateHealthPacks(tickNow);
+            updateItemPickups(tickNow, deltaSeconds);
             updateMines(tickNow);
             updateSatellitePickup(tickNow);
             updateSatellitePlayers(tickNow, deltaSeconds);
             updatePoison(tickNow, deltaSeconds);
             updateBullets(deltaSeconds);
             updatePlayerBuffs(deltaSeconds);
+            updatePlayerItemEffects(tickNow, deltaSeconds);
+            tryApplyRamImpact('p1', 'p2');
+            tryApplyRamImpact('p2', 'p1');
             updateNeutralDog(tickNow, deltaSeconds);
             updateHitFlash();
             drawMinimaps();
