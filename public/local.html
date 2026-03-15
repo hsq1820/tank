@@ -737,9 +737,11 @@
         const PLANE_DURATION = 15000;
         const PLANE_HEIGHT = 18;
         const PLANE_BOMB_INTERVAL = 1000;
-        const PLANE_BOMB_DAMAGE = 5;
+        const PLANE_BOMB_DAMAGE = 10;
         const PLANE_BOMB_RADIUS = 4.2;
         const PLANE_SHADOW_SCALE = 4.6;
+        const BURN_ZONE_DURATION = 3000;
+        const BURN_ZONE_DPS = 2;
 
         const ACTION_LABELS = {
             forward: '前进',
@@ -844,6 +846,80 @@
             return texture;
         }
 
+        function createItemTexture(itemId) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, 128, 128);
+            const def = ITEM_DEFS[itemId];
+
+            if (itemId === 'boiling') {
+                ctx.fillStyle = '#ef4444';
+                ctx.beginPath();
+                ctx.moveTo(64, 20);
+                ctx.bezierCurveTo(90, 40, 98, 62, 94, 78);
+                ctx.bezierCurveTo(89, 98, 74, 108, 64, 108);
+                ctx.bezierCurveTo(54, 108, 39, 98, 34, 78);
+                ctx.bezierCurveTo(30, 62, 38, 40, 64, 20);
+                ctx.fill();
+            } else if (itemId === 'plane') {
+                ctx.fillStyle = '#38bdf8';
+                ctx.save();
+                ctx.translate(64, 64);
+                ctx.rotate(-0.25);
+                ctx.beginPath();
+                ctx.moveTo(-6, -42);
+                ctx.lineTo(8, -6);
+                ctx.lineTo(28, 2);
+                ctx.lineTo(32, 12);
+                ctx.lineTo(8, 10);
+                ctx.lineTo(4, 40);
+                ctx.lineTo(-6, 40);
+                ctx.lineTo(-10, 10);
+                ctx.lineTo(-34, 12);
+                ctx.lineTo(-30, 2);
+                ctx.lineTo(-10, -6);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            } else if (itemId === 'shield') {
+                ctx.fillStyle = '#60a5fa';
+                ctx.beginPath();
+                ctx.moveTo(64, 16);
+                ctx.lineTo(98, 30);
+                ctx.lineTo(90, 86);
+                ctx.quadraticCurveTo(78, 104, 64, 112);
+                ctx.quadraticCurveTo(50, 104, 38, 86);
+                ctx.lineTo(30, 30);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+                ctx.lineWidth = 6;
+                ctx.stroke();
+            } else if (itemId === 'ram') {
+                ctx.strokeStyle = '#f97316';
+                ctx.lineWidth = 8;
+                ctx.beginPath();
+                ctx.moveTo(20, 48); ctx.lineTo(42, 48);
+                ctx.moveTo(14, 64); ctx.lineTo(42, 64);
+                ctx.moveTo(8, 80); ctx.lineTo(42, 80);
+                ctx.stroke();
+                ctx.fillStyle = '#f97316';
+                ctx.fillRect(44, 42, 40, 36);
+                ctx.fillRect(84, 50, 16, 20);
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(54, 80, 12, 12);
+                ctx.fillRect(76, 80, 12, 12);
+            } else {
+                return createGlyphTexture(def.glyph, def.color);
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+
         function createShadowTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 128;
@@ -861,7 +937,7 @@
             return texture;
         }
 
-        const ITEM_TEXTURES = Object.fromEntries(Object.values(ITEM_DEFS).map(item => [item.id, createGlyphTexture(item.glyph, item.color)]));
+        const ITEM_TEXTURES = Object.fromEntries(Object.values(ITEM_DEFS).map(item => [item.id, createItemTexture(item.id)]));
         const PLANE_TEXTURE = createGlyphTexture('✈', '#38bdf8');
         const SHADOW_TEXTURE = createShadowTexture();
 
@@ -1396,7 +1472,7 @@
             const player = players[playerKey];
             if (player.usingSatellite || player.satelliteFiring || player.plane.active) return false;
             player.ram.active = true;
-            player.ram.endsAt = Date.now() + RAM_DURATION;
+            player.ram.endsAt = Infinity;
             player.ram.dashing = false;
             player.ram.dashEndsAt = 0;
             player.ram.lastDashAt = 0;
@@ -1480,10 +1556,6 @@
                     updatePlayerHud(playerKey);
                 }
 
-                if (player.ram.active && now >= player.ram.endsAt) {
-                    clearRamState(player);
-                    updatePlayerHud(playerKey);
-                }
                 if (player.ram.dashing && now >= player.ram.dashEndsAt) {
                     player.ram.dashing = false;
                 }
@@ -1494,6 +1566,14 @@
                         updatePlayerHud(playerKey);
                     } else if (!player.plane.lastBombAt || now - player.plane.lastBombAt >= PLANE_BOMB_INTERVAL) {
                         player.plane.lastBombAt = now;
+                        const burnMesh = new THREE.Mesh(
+                            new THREE.CircleGeometry(PLANE_BOMB_RADIUS, 36),
+                            new THREE.MeshBasicMaterial({ color: 0xff7a00, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+                        );
+                        burnMesh.rotation.x = -Math.PI / 2;
+                        burnMesh.position.set(player.mesh.position.x, 0.08, player.mesh.position.z);
+                        scene.add(burnMesh);
+                        planeBurnZones.push({ x: player.mesh.position.x, z: player.mesh.position.z, radius: PLANE_BOMB_RADIUS, until: now + BURN_ZONE_DURATION, mesh: burnMesh });
                         for (const targetKey of ['p1', 'p2']) {
                             if (targetKey === playerKey) continue;
                             const target = players[targetKey];
@@ -1509,6 +1589,24 @@
                 }
 
                 updatePlayerEffectVisuals(playerKey);
+            }
+
+            for (let i = planeBurnZones.length - 1; i >= 0; i--) {
+                const zone = planeBurnZones[i];
+                if (now >= zone.until) {
+                    scene.remove(zone.mesh);
+                    zone.mesh.geometry.dispose();
+                    zone.mesh.material.dispose();
+                    planeBurnZones.splice(i, 1);
+                    continue;
+                }
+                for (const playerKey of ['p1', 'p2']) {
+                    const player = players[playerKey];
+                    if (player.hp <= 0 || isPlayerAirborne(player)) continue;
+                    if (Math.hypot(player.mesh.position.x - zone.x, player.mesh.position.z - zone.z) <= zone.radius) {
+                        applyDamage(playerKey, BURN_ZONE_DPS * deltaSeconds, 'burn');
+                    }
+                }
             }
         }
 
@@ -1561,6 +1659,7 @@
         const houses = [];
         const healthPacks = [];
         const itemPickups = [];
+        const planeBurnZones = [];
         const grassPatches = [];
         let gameStarted = false;
         let collisionDamageEnabled = true;
@@ -3130,13 +3229,17 @@
 
         function renderView(cam, player, x, y, w, h) {
             const isSatelliteView = player.usingSatellite || player.satelliteFiring;
-            const isScoping = !isSatelliteView && player.scoping;
+            const isPlaneView = !isSatelliteView && player.plane && player.plane.active;
+            const isScoping = !isSatelliteView && !isPlaneView && player.scoping;
             const fov = isScoping ? SCOPE_FOV : NORMAL_FOV;
             const shake = new THREE.Vector3((Math.random() - 0.5) * player.shake, (Math.random() - 0.5) * player.shake, 0);
             if (isSatelliteView) {
                 const satHeight = MAP_RADIUS / Math.tan(THREE.MathUtils.degToRad(NORMAL_FOV * 0.5));
                 cam.position.set(0, satHeight * 1.02, 0.01);
                 cam.lookAt(0, 0, 0);
+            } else if (isPlaneView) {
+                cam.position.set(player.mesh.position.x, PLANE_HEIGHT + 26, player.mesh.position.z + 0.01);
+                cam.lookAt(player.mesh.position.x, 0, player.mesh.position.z);
             } else if (isScoping) {
                 // 第一人称平视：相机在坦克位置（炮塔高度），朝坦克前方看
                 const eyePos = player.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
